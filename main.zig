@@ -16,8 +16,7 @@ fn printHelpMessage(allocator: std.mem.Allocator, writer: anytype) !void {
             "Options:\n" ++
             "\t-h --help\tShow this help message and exit.\n" ++
             "\t-v --version\tShow version information and exit.\n" ++
-            "\t-r --regen\tCreate new cache files for each plugin, ignore existing cache files.\n" ++
-            "\t-c --codepage\tSets the ANSI codepage to use when reading plugins. (1250-1252).\n" ++
+            //"\t-c --codepage\tSets the ANSI codepage to use when reading plugins. (1250-1252).\n" ++
             "\t   --log-level\tSets how verbose kTools logging should be. 0-4, 0 is least verbose.\n",
 
         .{args.next() orelse "kTools"},
@@ -25,11 +24,11 @@ fn printHelpMessage(allocator: std.mem.Allocator, writer: anytype) !void {
 }
 
 fn printVersionInfo(allocator: std.mem.Allocator, writer: anytype) !void {
-    const formatted_hash = if (build_info.local_hash) |hash| try std.fmt.allocPrint(
+    const formatted_hash = try std.fmt.allocPrint(
         allocator,
         "{x}",
-        .{std.fmt.fmtSliceHexLower(hash)},
-    ) else "UNDEFINED";
+        .{std.fmt.fmtSliceHexLower(build_info.local_hash)},
+    );
     defer allocator.free(formatted_hash);
 
     try writer.print(
@@ -78,12 +77,12 @@ fn getPluginList(allocator: std.mem.Allocator, path: []const u8) !plug_data {
         // zig fmt: on
     ];
 
-    var parser = std.json.Parser.init(allocator, false);
+    var parser = std.json.Parser.init(allocator, .alloc_if_needed);
     defer parser.deinit();
 
     var pluginlist_json = try parser.parse(pluginlist_raw);
     defer pluginlist_json.deinit();
-    const pluginlist = pluginlist_json.root.Array.items;
+    const pluginlist = pluginlist_json.root.array.items;
 
     const paths = try allocator.alloc([]const u8, pluginlist.len);
     errdefer allocator.free(paths);
@@ -98,13 +97,13 @@ fn getPluginList(allocator: std.mem.Allocator, path: []const u8) !plug_data {
 
     var pathsSizeTotal: usize = 0;
     for (pluginlist, 0..) |item, i| {
-        var iter = item.Object.iterator();
+        var iter = item.object.iterator();
         const entry = iter.next() orelse return error.InvalidJSON;
 
         pathsSizeTotal += entry.key_ptr.len;
         paths[i] = entry.key_ptr.*;
-        checksums[i] = if (entry.value_ptr.Array.items.len > 0)
-            try std.fmt.parseInt(u32, entry.value_ptr.Array.items[0].String, 0)
+        checksums[i] = if (entry.value_ptr.array.items.len > 0)
+            try std.fmt.parseInt(u32, entry.value_ptr.array.items[0].string, 0)
         else
             0;
     }
@@ -200,14 +199,12 @@ pub fn main() !void {
     const args = argsParser.parseForCurrentProcess(struct {
         help: bool = false,
         version: bool = false,
-        regen: bool = false,
         @"log-level": u2 = 2,
         codepage: u11 = 1252,
 
         pub const shorthands = .{
             .h = "help",
             .v = "version",
-            .r = "regen",
         };
     }, allocator, .print) catch return printHelpMessage(allocator, buffered_StdOut.writer());
     defer args.deinit();

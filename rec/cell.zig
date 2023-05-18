@@ -487,7 +487,7 @@ pub fn writeAll(
 
         var buffered_writer = std.io.bufferedWriter(out_file.writer());
         var json_stream = std.json.writeStream(buffered_writer.writer(), 16);
-        json_stream.whitespace.indent = .{ .Space = 2 };
+        json_stream.whitespace.indent = .{ .space = 2 };
 
         try json_stream.beginObject();
         try json_stream.objectField("deleted");
@@ -586,7 +586,7 @@ pub fn writeAll(
 
         var buffered_writer = std.io.bufferedWriter(out_file.writer());
         var json_stream = std.json.writeStream(buffered_writer.writer(), 16);
-        json_stream.whitespace.indent = .{ .Space = 2 };
+        json_stream.whitespace.indent = .{ .space = 2 };
 
         try json_stream.beginObject();
         try json_stream.objectField("deleted");

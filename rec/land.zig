@@ -111,7 +111,7 @@ pub fn writeAll(
         var writer = buffered_writer.writer();
 
         var json_stream = std.json.writeStream(writer, 6);
-        json_stream.whitespace.indent = .{ .Space = 2 };
+        json_stream.whitespace.indent = .{ .space = 2 };
 
         try json_stream.beginObject();
         try json_stream.objectField("deleted");
@@ -153,14 +153,14 @@ pub fn writeAll(
                 try std.json.stringify(vtex.*, .{}, json_stream.stream);
                 json_stream.state_index -= 1;
             } else {
-                json_stream.whitespace.indent = .{ .None = {} };
+                json_stream.whitespace.indent = .{ .none = {} };
                 try json_stream.beginArray();
                 for (vtex.*) |tex| {
                     try json_stream.arrayElem();
                     try util.emitField(undefined, &json_stream, tex);
                 }
                 try json_stream.endArray();
-                json_stream.whitespace.indent = .{ .Space = 2 };
+                json_stream.whitespace.indent = .{ .space = 2 };
             }
         } else try json_stream.emitNull();
 

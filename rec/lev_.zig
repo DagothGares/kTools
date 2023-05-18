@@ -123,7 +123,7 @@ pub fn writeAll(
         var writer = buffered_writer.writer();
 
         var json_stream = std.json.writeStream(writer, 6);
-        json_stream.whitespace.indent = .{ .Space = 2 };
+        json_stream.whitespace.indent = .{ .space = 2 };
 
         try json_stream.beginObject();
         inline for (std.meta.fields(LEV_)[1..4]) |field| {

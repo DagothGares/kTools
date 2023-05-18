@@ -44,12 +44,9 @@ fn checksum_recursive(blake: *std.crypto.hash.Blake3, dir: std.fs.Dir) !void {
     }
 }
 
-fn checksumSrcDirectory(root: std.fs.Dir, out: []u8) ?[]const u8 {
-    var dir = root.openDir("src", .{ .no_follow = true }) catch return null;
-    defer dir.close();
-
+fn checksumSrcDirectory(root: std.fs.Dir, out: []u8) ![]const u8 {
     var hash = std.crypto.hash.Blake3.init(.{});
-    checksum_recursive(&hash, dir) catch return null;
+    try checksum_recursive(&hash, root);
     hash.final(out);
 
     return out;
@@ -58,7 +55,7 @@ fn checksumSrcDirectory(root: std.fs.Dir, out: []u8) ?[]const u8 {
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -76,9 +73,9 @@ pub fn build(b: *std.Build) void {
     // of the current directory via BLAKE3, instead.
     var blake3_checksum: [32]u8 = .{0} ** 32;
     build_info.addOption(
-        ?[]const u8,
+        []const u8,
         "local_hash",
-        checksumSrcDirectory(b.build_root.handle, &blake3_checksum),
+        try checksumSrcDirectory(b.build_root.handle, &blake3_checksum),
     );
     build_info.addOption(i64, "date_time", std.time.timestamp());
 
@@ -88,7 +85,7 @@ pub fn build(b: *std.Build) void {
     );
 
     const exe = b.addExecutable(.{
-        .name = "kTv3",
+        .name = "kTools",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "main.zig" },

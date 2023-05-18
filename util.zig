@@ -183,7 +183,7 @@ pub fn writeAllGeneric(
 
         var buffered_writer = std.io.bufferedWriter(out_file.writer());
         var json_stream = std.json.writeStream(buffered_writer.writer(), max_depth);
-        json_stream.whitespace.indent = .{ .Space = 2 };
+        json_stream.whitespace.indent = .{ .space = 2 };
 
         const T = @TypeOf(v);
 
@@ -250,14 +250,14 @@ pub fn emitField(
                     stream.state_index -= 1;
                 },
                 .Float => {
-                    stream.whitespace.indent = .{ .None = {} };
+                    stream.whitespace.indent = .{ .none = {} };
                     try stream.beginArray();
                     for (value) |v| {
                         try stream.arrayElem();
                         try emitField(allocator, stream, v);
                     }
                     try stream.endArray();
-                    stream.whitespace.indent = .{ .Space = 2 };
+                    stream.whitespace.indent = .{ .space = 2 };
                 },
                 else => {
                     try stream.beginArray();
