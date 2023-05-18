@@ -3,7 +3,7 @@ kTools is a (work-in-progress) parser for Morrowind's ESM and ESP file format. I
 
 ## Building
 You need:
-- A build of Zig 0.11 (last tested with 0.11.0-dev.3050+05ceac52c), which you can get from either [the main site](https://ziglang.org/download/) or by using [zigup](https://github.com/marler8997/zigup)
+- A build of Zig 0.11 (last tested with 0.11.0-dev.3198+ad20236e9), which you can get from either [the main site](https://ziglang.org/download/) or by using [zigup](https://github.com/marler8997/zigup)
 - (optional) git, to grab the necessary [zig-args](https://github.com/MasterQ32/zig-args) submodule
 
 ### Using git:
