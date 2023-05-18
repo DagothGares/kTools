@@ -3,9 +3,6 @@ const builtin = @import("builtin");
 
 pub const FileMap = @import("util/FileMap.zig");
 pub const Logger = @import("util/Logger.zig");
-pub const PackedIntArrayList = @import(
-    "util/packed_int_array_list.zig",
-).PackedIntArrayListUnmanaged;
 pub const iterators = @import("util/iterators.zig");
 pub const SubrecordIterator = iterators.SubrecordIterator(std.io.FixedBufferStream([]const u8));
 

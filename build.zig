@@ -84,14 +84,14 @@ pub fn build(b: *std.Build) void {
 
     const args_module = b.addModule(
         "zig-args",
-        .{ .source_file = .{ .path = "src/lib/zig-args/args.zig" } },
+        .{ .source_file = .{ .path = "lib/zig-args/args.zig" } },
     );
 
     const exe = b.addExecutable(.{
         .name = "kTv3",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "main.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -109,7 +109,7 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/test.zig" },
+        .root_source_file = .{ .path = "test.zig" },
         .target = target,
         .optimize = optimize,
     });
