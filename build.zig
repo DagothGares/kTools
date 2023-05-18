@@ -45,8 +45,11 @@ fn checksum_recursive(blake: *std.crypto.hash.Blake3, dir: std.fs.Dir) !void {
 }
 
 fn checksumSrcDirectory(root: std.fs.Dir, out: []u8) ![]const u8 {
+    var dir = try root.openDir("src", .{ .no_follow = true });
+    defer dir.close();
+
     var hash = std.crypto.hash.Blake3.init(.{});
-    try checksum_recursive(&hash, root);
+    try checksum_recursive(&hash, dir);
     hash.final(out);
 
     return out;
@@ -88,7 +91,7 @@ pub fn build(b: *std.Build) !void {
         .name = "kTools",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -106,7 +109,7 @@ pub fn build(b: *std.Build) !void {
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "test.zig" },
+        .root_source_file = .{ .path = "src/test.zig" },
         .target = target,
         .optimize = optimize,
     });
