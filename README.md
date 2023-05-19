@@ -30,7 +30,9 @@ Make a json file that contains an array of plugin paths and hashes, like so:
 ]
 ```
 The first line is an example Windows path, while the latter two are example Linux paths.
+
 The astute may recognize that this matches the format of TES3MP's requiredDataFiles.json; it is valid to copy and paste that to use it as a template.
+
 It is recommended to use full paths. (Start from the drive letter on Windows, or the root directory ``/`` on Linux)
 
 Note that while you are allowed to specify multiple hashes for each file, only the first hash is checked, to ensure that the data generated is authoritative.
