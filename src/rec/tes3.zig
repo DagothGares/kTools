@@ -19,10 +19,10 @@ const HEDR = extern struct {
     num_records: u32 align(1),
 };
 
-pub const TES3 = struct {
-    HEDR: HEDR,
-    masters: []u32,
-};
+HEDR: HEDR,
+masters: []u32,
+
+const TES3 = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

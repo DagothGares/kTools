@@ -21,14 +21,14 @@ const SNAM = extern struct {
     chance: u8 align(1),
 };
 
-pub const REGN = struct {
-    deleted: bool,
-    FNAM: []const u8 = undefined,
-    CNAM: [4]u8 = undefined,
-    WEAT: WEAT = .{},
-    BNAM: ?[]const u8 = null,
-    SNAM: ?[]SNAM = null,
-};
+deleted: bool,
+FNAM: []const u8 = undefined,
+CNAM: [4]u8 = undefined,
+WEAT: WEAT = .{},
+BNAM: ?[]const u8 = null,
+SNAM: ?[]SNAM = null,
+
+const REGN = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

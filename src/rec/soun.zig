@@ -9,11 +9,11 @@ const DATA = extern struct {
     max_range: u8 align(1),
 };
 
-pub const SOUN = struct {
-    deleted: bool,
-    FNAM: []const u8 = undefined,
-    DATA: DATA = undefined,
-};
+deleted: bool,
+FNAM: []const u8 = undefined,
+DATA: DATA = undefined,
+
+const SOUN = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

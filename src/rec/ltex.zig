@@ -3,11 +3,11 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const LTEX = struct {
-    deleted: bool,
-    INTV: u32 = undefined,
-    DATA: []const u8 = undefined,
-};
+deleted: bool,
+INTV: u32 = undefined,
+DATA: []const u8 = undefined,
+
+const LTEX = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

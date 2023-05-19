@@ -9,11 +9,11 @@ const SKDT = extern struct {
     use_values: [4]f32 align(1),
 };
 
-pub const SKIL = struct {
-    deleted: bool,
-    SKDT: SKDT = undefined,
-    DESC: ?[]const u8 = null,
-};
+deleted: bool,
+SKDT: SKDT = undefined,
+DESC: ?[]const u8 = null,
+
+const SKIL = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

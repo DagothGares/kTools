@@ -11,14 +11,14 @@ const SCHD = extern struct {
     local_var_size: u32 align(1),
 };
 
-pub const SCPT = struct {
-    deleted: bool,
-    SCHD: SCHD = undefined,
-    // NOTE: should be split into a set of substrings at write time
-    SCVR: ?[]const u8 = null,
-    SCDT: ?[]const u8 = null,
-    SCTX: ?[]const u8 = null,
-};
+deleted: bool,
+SCHD: SCHD = undefined,
+// NOTE: should be split into a set of substrings at write time
+SCVR: ?[]const u8 = null,
+SCDT: ?[]const u8 = null,
+SCTX: ?[]const u8 = null,
+
+const SCPT = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

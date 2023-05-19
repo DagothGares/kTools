@@ -3,10 +3,10 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const GMST = struct {
-    deleted: bool,
-    __TV: union { FL: f32, IN: i32, ST: []const u8 } = undefined,
-};
+deleted: bool,
+__TV: union { FL: f32, IN: i32, ST: []const u8 } = undefined,
+
+const GMST = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

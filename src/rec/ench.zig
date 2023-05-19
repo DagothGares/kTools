@@ -12,11 +12,11 @@ const ENDT = extern struct {
     flags: u32 align(1),
 };
 
-pub const ENCH = struct {
-    deleted: bool,
-    ENDT: ENDT = undefined,
-    ENAM: ?[]ENAM = null,
-};
+deleted: bool,
+ENDT: ENDT = undefined,
+ENAM: ?[]ENAM = null,
+
+const ENCH = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

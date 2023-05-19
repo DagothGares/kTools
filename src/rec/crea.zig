@@ -24,21 +24,21 @@ const NPDT = extern struct {
     gold: u32 align(1),
 };
 
-pub const CREA = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    FLAG: u32 = undefined,
-    NPDT: NPDT = undefined,
-    AIDT: AIDT = undefined,
-    CNAM: ?[]const u8 = null,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    XSCL: ?f32 = null,
-    NPCO: ?[]NPCO = null,
-    NPCS: ?[][]const u8 = null,
-    DODT: ?[]DODT = null,
-    AI__: ?[]AI__ = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+FLAG: u32 = undefined,
+NPDT: NPDT = undefined,
+AIDT: AIDT = undefined,
+CNAM: ?[]const u8 = null,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+XSCL: ?f32 = null,
+NPCO: ?[]NPCO = null,
+NPCS: ?[][]const u8 = null,
+DODT: ?[]DODT = null,
+AI__: ?[]AI__ = null,
+
+const CREA = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

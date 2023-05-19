@@ -14,13 +14,13 @@ const RADT = extern struct {
     flags: u32 align(1),
 };
 
-pub const RACE = struct {
-    deleted: bool,
-    FNAM: []const u8 = undefined,
-    RADT: RADT = undefined,
-    DESC: ?[]const u8 = null,
-    NPCS: ?[][]const u8 = null,
-};
+deleted: bool,
+FNAM: []const u8 = undefined,
+RADT: RADT = undefined,
+DESC: ?[]const u8 = null,
+NPCS: ?[][]const u8 = null,
+
+const RACE = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

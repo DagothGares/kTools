@@ -11,14 +11,14 @@ const IRDT = extern struct {
     attribute_id: [4]i32 align(1),
 };
 
-pub const INGR = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    IRDT: IRDT = undefined,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+IRDT: IRDT = undefined,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+
+const INGR = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

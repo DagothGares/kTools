@@ -5,12 +5,12 @@ const subs = util.subs;
 
 const INFO = @import("info.zig");
 
-pub const DIAL = struct {
-    deleted: bool,
-    DATA: u8 = undefined,
-    // TODO: this should probably just be a linked list instead
-    INFO: std.StringArrayHashMapUnmanaged(INFO.INFO.payload_type) = .{},
-};
+deleted: bool,
+DATA: u8 = undefined,
+// TODO: this should probably just be a linked list instead
+INFO: std.StringArrayHashMapUnmanaged(INFO.payload_type) = .{},
+
+const DIAL = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

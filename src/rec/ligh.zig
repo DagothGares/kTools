@@ -12,15 +12,15 @@ const LHDT = extern struct {
     flags: u32 align(1),
 };
 
-pub const LIGH = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    LHDT: LHDT = undefined,
-    FNAM: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    SNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+LHDT: LHDT = undefined,
+FNAM: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+SNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+
+const LIGH = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

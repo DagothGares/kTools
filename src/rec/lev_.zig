@@ -11,16 +11,16 @@ const _NAM = struct {
 pub const lev_type = enum { LEVC, LEVI };
 
 // LEVC and LEVI are basically the same, except one uses CNAM and the other uses INAM
-pub const LEV_ = struct {
-    lev_: lev_type,
-    deleted: bool,
-    DATA: u32 = undefined,
-    NNAM: u8 = undefined,
-    // INDX ignored
+lev_: lev_type,
+deleted: bool,
+DATA: u32 = undefined,
+NNAM: u8 = undefined,
+// INDX ignored
 
-    // TODO: make this a StringArrayHashMap that marks weights for the given levels
-    _NAM: ?[]_NAM = null,
-};
+// TODO: make this a StringArrayHashMap that marks weights for the given levels
+_NAM: ?[]_NAM = null,
+
+const LEV_ = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

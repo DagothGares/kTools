@@ -5,14 +5,14 @@ const subs = util.subs;
 
 const RIDT = @import("shared.zig").__DT;
 
-pub const REPA = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    RIDT: RIDT = undefined,
-    FNAM: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+RIDT: RIDT = undefined,
+FNAM: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+
+const REPA = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

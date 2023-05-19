@@ -36,13 +36,13 @@ pub const pgrd_data = struct {
     }
 };
 
-pub const PGRD = struct {
-    deleted: bool,
-    DATA: DATA = undefined,
-    NAME: ?[]const u8 = null,
-    PGRP: ?[]PathPoint = null,
-    PGRC: ?[]u32 = null,
-};
+deleted: bool,
+DATA: DATA = undefined,
+NAME: ?[]const u8 = null,
+PGRP: ?[]PathPoint = null,
+PGRC: ?[]u32 = null,
+
+const PGRD = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

@@ -3,11 +3,11 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const GLOB = struct {
-    deleted: bool,
-    FNAM: u8 = undefined,
-    FLTV: union { short: i16, long: i32, float: f32 } = undefined,
-};
+deleted: bool,
+FNAM: u8 = undefined,
+FLTV: union { short: i16, long: i32, float: f32 } = undefined,
+
+const GLOB = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

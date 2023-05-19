@@ -5,15 +5,15 @@ const subs = util.subs;
 
 const NPCO = @import("shared.zig").NPCO;
 
-pub const CONT = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    CNDT: f32 = undefined,
-    FLAG: u32 = undefined,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    NPCO: ?[]NPCO = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+CNDT: f32 = undefined,
+FLAG: u32 = undefined,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+NPCO: ?[]NPCO = null,
+
+const CONT = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

@@ -11,12 +11,12 @@ const SPDT = extern struct {
     flags: u32 align(1),
 };
 
-pub const SPEL = struct {
-    deleted: bool,
-    SPDT: SPDT = undefined,
-    FNAM: ?[]const u8 = null,
-    ENAM: ?[]ENAM = null,
-};
+deleted: bool,
+SPDT: SPDT = undefined,
+FNAM: ?[]const u8 = null,
+ENAM: ?[]ENAM = null,
+
+const SPEL = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

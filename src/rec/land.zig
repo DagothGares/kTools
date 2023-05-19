@@ -11,16 +11,16 @@ const VHGT = extern struct {
     height_data: [65][65]i8 align(1),
 };
 
-pub const LAND = struct {
-    deleted: bool,
-    DATA: u32 = undefined,
-    VHGT: ?*align(1) const VHGT = null,
-    VNML: ?*align(1) const [65][65][3]i8 = null,
-    WNAM: ?*align(1) const [9][9]u8 = null,
-    VCLR: ?*align(1) const [65][65][3]u8 = null,
-    // needs to be converted from little endian
-    VTEX: ?*align(1) const [16][16]u16 = null,
-};
+deleted: bool,
+DATA: u32 = undefined,
+VHGT: ?*align(1) const VHGT = null,
+VNML: ?*align(1) const [65][65][3]i8 = null,
+WNAM: ?*align(1) const [9][9]u8 = null,
+VCLR: ?*align(1) const [65][65][3]u8 = null,
+// needs to be converted from little endian
+VTEX: ?*align(1) const [16][16]u16 = null,
+
+const LAND = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

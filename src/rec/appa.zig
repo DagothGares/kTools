@@ -10,14 +10,14 @@ const AADT = extern struct {
     value: u32 align(1),
 };
 
-pub const APPA = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    FNAM: []const u8 = undefined,
-    AADT: AADT = undefined,
-    SCRI: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+FNAM: []const u8 = undefined,
+AADT: AADT = undefined,
+SCRI: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+
+const APPA = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

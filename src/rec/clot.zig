@@ -14,16 +14,16 @@ const CTDT = extern struct {
 
 const INDX = @import("shared.zig").INDX;
 
-pub const CLOT = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    CTDT: CTDT = undefined,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    ENAM: ?[]const u8 = null,
-    INDX: ?[]INDX = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+CTDT: CTDT = undefined,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+ENAM: ?[]const u8 = null,
+INDX: ?[]INDX = null,
+
+const CLOT = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

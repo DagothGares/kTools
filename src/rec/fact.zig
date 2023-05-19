@@ -20,13 +20,13 @@ const ANAM = struct {
     reaction: i32,
 };
 
-pub const FACT = struct {
-    deleted: bool,
-    FNAM: []const u8 = undefined,
-    FADT: FADT = undefined,
-    RNAM: ?[][]const u8 = null,
-    ANAM: ?[]ANAM = null,
-};
+deleted: bool,
+FNAM: []const u8 = undefined,
+FADT: FADT = undefined,
+RNAM: ?[][]const u8 = null,
+ANAM: ?[]ANAM = null,
+
+const FACT = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

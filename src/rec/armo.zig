@@ -14,16 +14,16 @@ const AODT = extern struct {
 
 const INDX = @import("shared.zig").INDX;
 
-pub const ARMO = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    FNAM: []const u8 = undefined,
-    AODT: AODT = undefined,
-    SCRI: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    ENAM: ?[]const u8 = null, // passive ENAM
-    INDX: ?[]INDX = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+FNAM: []const u8 = undefined,
+AODT: AODT = undefined,
+SCRI: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+ENAM: ?[]const u8 = null, // passive ENAM
+INDX: ?[]INDX = null,
+
+const ARMO = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

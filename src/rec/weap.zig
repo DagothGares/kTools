@@ -15,15 +15,15 @@ const WPDT = extern struct {
     flags: u32 align(1),
 };
 
-pub const WEAP = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    WPDT: WPDT = undefined,
-    FNAM: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    ENAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+WPDT: WPDT = undefined,
+FNAM: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+ENAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+
+const WEAP = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

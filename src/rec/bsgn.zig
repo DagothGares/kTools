@@ -11,13 +11,13 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const BSGN = struct {
-    deleted: bool,
-    FNAM: ?[]const u8 = null,
-    TNAM: ?[]const u8 = null,
-    DESC: ?[]const u8 = null,
-    NPCS: ?[][]const u8 = null,
-};
+deleted: bool,
+FNAM: ?[]const u8 = null,
+TNAM: ?[]const u8 = null,
+DESC: ?[]const u8 = null,
+NPCS: ?[][]const u8 = null,
+
+const BSGN = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

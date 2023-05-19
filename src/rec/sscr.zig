@@ -3,10 +3,10 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const SSCR = struct {
-    deleted: bool,
-    DATA: []const u8 = undefined,
-};
+deleted: bool,
+DATA: []const u8 = undefined,
+
+const SSCR = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

@@ -3,7 +3,7 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-const DIAL = @import("dial.zig").DIAL;
+const DIAL = @import("dial.zig");
 
 /// first 4 bytes and the last byte are meaningless, and thus cut
 const DATA = extern struct {
@@ -22,27 +22,28 @@ const SCVR = struct {
     __TV: ?union(enum) { IN: u32, FL: f32 } = null,
 };
 
-pub const INFO = struct {
-    pub const payload_type = struct {
-        // bottom bit is the deletion flag, top 2 are an enum for QSTN/QSTF/QSTR/null
-        flags: u3 = 0,
-        PNAM: ?[]const u8 = null,
-        NNAM: ?[]const u8 = null,
-        DATA: ?DATA = null,
-        ONAM: ?[]const u8 = null,
-        RNAM: ?[]const u8 = null,
-        CNAM: ?[]const u8 = null,
-        FNAM: ?[]const u8 = null,
-        ANAM: ?[]const u8 = null,
-        DNAM: ?[]const u8 = null,
-        SNAM: ?[]const u8 = null,
-        NAME: ?[]const u8 = null,
-        BNAM: ?[]const u8 = null,
-        SCVR: ?[]SCVR = null,
-    };
-    INAM: []const u8 = undefined,
-    payload: payload_type,
+pub const payload_type = struct {
+    // bottom bit is the deletion flag, top 2 are an enum for QSTN/QSTF/QSTR/null
+    flags: u3 = 0,
+    PNAM: ?[]const u8 = null,
+    NNAM: ?[]const u8 = null,
+    DATA: ?DATA = null,
+    ONAM: ?[]const u8 = null,
+    RNAM: ?[]const u8 = null,
+    CNAM: ?[]const u8 = null,
+    FNAM: ?[]const u8 = null,
+    ANAM: ?[]const u8 = null,
+    DNAM: ?[]const u8 = null,
+    SNAM: ?[]const u8 = null,
+    NAME: ?[]const u8 = null,
+    BNAM: ?[]const u8 = null,
+    SCVR: ?[]SCVR = null,
 };
+
+INAM: []const u8 = undefined,
+payload: payload_type,
+
+const INFO = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

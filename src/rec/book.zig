@@ -25,16 +25,16 @@ const BKDT = extern struct {
     enchant_points: u32 align(1),
 };
 
-pub const BOOK = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    BKDT: BKDT = undefined,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    TEXT: ?[]const u8 = null,
-    ENAM: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+BKDT: BKDT = undefined,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+TEXT: ?[]const u8 = null,
+ENAM: ?[]const u8 = null,
+
+const BOOK = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

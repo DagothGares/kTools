@@ -13,21 +13,21 @@ const MEDT = extern struct {
     size_cap: f32 align(1),
 };
 
-pub const MGEF = struct {
-    deleted: bool,
-    MEDT: MEDT = undefined,
-    ITEX: ?[]const u8 = null,
-    PTEX: ?[]const u8 = null,
-    BSND: ?[]const u8 = null,
-    CSND: ?[]const u8 = null,
-    HSND: ?[]const u8 = null,
-    ASND: ?[]const u8 = null,
-    CVFX: ?[]const u8 = null,
-    BVFX: ?[]const u8 = null,
-    HVFX: ?[]const u8 = null,
-    AVFX: ?[]const u8 = null,
-    DESC: ?[]const u8 = null,
-};
+deleted: bool,
+MEDT: MEDT = undefined,
+ITEX: ?[]const u8 = null,
+PTEX: ?[]const u8 = null,
+BSND: ?[]const u8 = null,
+CSND: ?[]const u8 = null,
+HSND: ?[]const u8 = null,
+ASND: ?[]const u8 = null,
+CVFX: ?[]const u8 = null,
+BVFX: ?[]const u8 = null,
+HVFX: ?[]const u8 = null,
+AVFX: ?[]const u8 = null,
+DESC: ?[]const u8 = null,
+
+const MGEF = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

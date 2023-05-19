@@ -33,24 +33,24 @@ const NPDT_52 = extern struct {
     gold: u32 align(1),
 };
 
-pub const NPC_ = struct {
-    flag: u2,
-    FLAG: u32 = undefined,
-    RNAM: []const u8 = undefined,
-    CNAM: []const u8 = undefined,
-    ANAM: []const u8 = undefined,
-    BNAM: []const u8 = undefined,
-    KNAM: []const u8 = undefined,
-    NPDT: union { short: NPDT_12, long: NPDT_52 } = undefined,
-    MODL: ?[]const u8 = null,
-    FNAM: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    AIDT: ?AIDT = null,
-    NPCO: ?[]NPCO = null,
-    NPCS: ?[][]const u8 = null,
-    DODT: ?[]DODT = null,
-    AI__: ?[]AI__ = null,
-};
+flag: u2,
+FLAG: u32 = undefined,
+RNAM: []const u8 = undefined,
+CNAM: []const u8 = undefined,
+ANAM: []const u8 = undefined,
+BNAM: []const u8 = undefined,
+KNAM: []const u8 = undefined,
+NPDT: union { short: NPDT_12, long: NPDT_52 } = undefined,
+MODL: ?[]const u8 = null,
+FNAM: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+AIDT: ?AIDT = null,
+NPCO: ?[]NPCO = null,
+NPCS: ?[][]const u8 = null,
+DODT: ?[]DODT = null,
+AI__: ?[]AI__ = null,
+
+const NPC_ = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

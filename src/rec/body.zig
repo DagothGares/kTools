@@ -22,12 +22,12 @@ const BYDT = extern struct {
     part_type: u8,
 };
 
-pub const BODY = struct {
-    deleted: bool,
-    MODL: []const u8 = undefined,
-    FNAM: []const u8 = undefined,
-    BYDT: BYDT = undefined,
-};
+deleted: bool,
+MODL: []const u8 = undefined,
+FNAM: []const u8 = undefined,
+BYDT: BYDT = undefined,
+
+const BODY = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

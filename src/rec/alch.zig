@@ -13,15 +13,15 @@ const ALDT = extern struct {
     flags: u32 align(1),
 };
 
-pub const ALCH = struct {
-    flag: u2,
-    ALDT: ALDT = undefined,
-    MODL: ?[]const u8 = null,
-    TEXT: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-    FNAM: ?[]const u8 = null,
-    ENAM: ?[]ENAM = null,
-};
+flag: u2,
+ALDT: ALDT = undefined,
+MODL: ?[]const u8 = null,
+TEXT: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+FNAM: ?[]const u8 = null,
+ENAM: ?[]ENAM = null,
+
+const ALCH = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

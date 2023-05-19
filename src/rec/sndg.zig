@@ -3,12 +3,12 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
-pub const SNDG = struct {
-    flag: u2,
-    DATA: u32 = undefined,
-    CNAM: ?[]const u8 = null,
-    SNAM: ?[]const u8 = null,
-};
+flag: u2,
+DATA: u32 = undefined,
+CNAM: ?[]const u8 = null,
+SNAM: ?[]const u8 = null,
+
+const SNDG = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

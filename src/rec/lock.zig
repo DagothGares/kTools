@@ -5,14 +5,14 @@ const subs = util.subs;
 
 const LKDT = @import("shared.zig").__DT;
 
-pub const LOCK = struct {
-    flag: u2,
-    MODL: []const u8 = undefined,
-    LKDT: LKDT = undefined,
-    FNAM: ?[]const u8 = null,
-    ITEX: ?[]const u8 = null,
-    SCRI: ?[]const u8 = null,
-};
+flag: u2,
+MODL: []const u8 = undefined,
+LKDT: LKDT = undefined,
+FNAM: ?[]const u8 = null,
+ITEX: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+
+const LOCK = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,

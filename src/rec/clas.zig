@@ -22,12 +22,12 @@ const CLDT = extern struct {
     autocalc: u32 align(1),
 };
 
-pub const CLAS = struct {
-    deleted: bool,
-    FNAM: []const u8 = undefined,
-    CLDT: CLDT = undefined,
-    DESC: ?[]const u8 = null,
-};
+deleted: bool,
+FNAM: []const u8 = undefined,
+CLDT: CLDT = undefined,
+DESC: ?[]const u8 = null,
+
+const CLAS = @This();
 
 pub fn parse(
     allocator: std.mem.Allocator,
