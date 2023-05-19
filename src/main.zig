@@ -12,13 +12,17 @@ fn printHelpMessage(allocator: std.mem.Allocator, writer: anytype) !void {
     defer args.deinit();
 
     try writer.print(
-        "Usage: {s} [options] <input_file> <output_dir>\n\n" ++
-            "Options:\n" ++
-            "\t-h --help\tShow this help message and exit.\n" ++
-            "\t-v --version\tShow version information and exit.\n" ++
-            //"\t-c --codepage\tSets the ANSI codepage to use when reading plugins. (1250-1252).\n" ++
-            "\t   --log-level\tSets how verbose kTools logging should be. 0-4, 0 is least verbose.\n",
-
+        // zig fmt: off
+    "Usage: {s} [options] <input_file> <output_dir>\n\n" ++
+        "Options:\n" ++
+        "\t-h --help\tShow this help message and exit.\n" ++
+        "\t-v --version\tShow version information and exit.\n" ++
+        "\t-c --codepage\tSets the Windows codepage to use when reading plugins.\n" ++
+        "\t\t1250 - Central / Eastern European, Latin Script\n" ++
+        "\t\t1251 - Cyrillic Script\n" ++
+        "\t\t1252 - Latin (default)\n" ++
+        "\t   --log-level\tSets how verbose kTools logging should be. 0-4, 0 is least verbose.\n",
+    // zig fmt: on
         .{args.next() orelse "kTools"},
     );
 }
@@ -205,6 +209,7 @@ pub fn main() !void {
         pub const shorthands = .{
             .h = "help",
             .v = "version",
+            .c = "codepage",
         };
     }, allocator, .print) catch return printHelpMessage(allocator, buffered_StdOut.writer());
     defer args.deinit();
@@ -212,6 +217,8 @@ pub fn main() !void {
     if (args.options.version) return printVersionInfo(allocator, buffered_StdOut.writer());
     if (args.options.help or args.positionals.len != 2)
         return printHelpMessage(allocator, buffered_StdOut.writer());
+    // It's theoretically possible to check this per-plugin, but too risky/too much work.
+    try util.toUtf8.set_codepage(args.options.codepage);
 
     const plugins = try getPluginList(allocator, args.positionals[0]);
     defer {
@@ -299,6 +306,5 @@ pub fn main() !void {
     try logger.info("Now writing database\n", .{});
     try logger.buffer.flush();
 
-    // TODO: allow setting a codepage
     try cache.writeAll(allocator, &map, output_directory);
 }
