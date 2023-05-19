@@ -119,7 +119,6 @@ pub fn parse(
 }
 
 inline fn writeAnam(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -131,7 +130,7 @@ inline fn writeAnam(
         try json_stream.beginObject();
         for (anam_slice) |anam| {
             try json_stream.objectField(anam.faction);
-            try util.emitField(allocator, json_stream, anam.reaction);
+            try util.emitField(json_stream, anam.reaction);
         }
         try json_stream.endObject();
     } else try json_stream.emitNull();

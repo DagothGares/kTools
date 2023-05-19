@@ -118,17 +118,17 @@ pub fn writeAll(
         try json_stream.emitBool(v.deleted);
 
         try json_stream.objectField("DATA");
-        try util.emitField(undefined, &json_stream, v.DATA);
+        try util.emitField(&json_stream, v.DATA);
         try json_stream.objectField("VHGT");
         if (v.VHGT) |vhgt| {
             try json_stream.beginObject();
 
             try json_stream.objectField("offset");
             if (comptime builtin.cpu.arch.endian() == .Little) {
-                try util.emitField(undefined, &json_stream, vhgt.offset);
+                try util.emitField(&json_stream, vhgt.offset);
             } else {
                 const big = util.castForeign(f32, &@bitCast([4]u8, vhgt.offset));
-                try util.emitField(undefined, &json_stream, big);
+                try util.emitField(&json_stream, big);
             }
 
             try json_stream.objectField("height_data");
@@ -157,7 +157,7 @@ pub fn writeAll(
                 try json_stream.beginArray();
                 for (vtex.*) |tex| {
                     try json_stream.arrayElem();
-                    try util.emitField(undefined, &json_stream, tex);
+                    try util.emitField(&json_stream, tex);
                 }
                 try json_stream.endArray();
                 json_stream.whitespace.indent = .{ .space = 2 };

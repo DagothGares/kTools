@@ -67,7 +67,7 @@ pub fn parse(
 
 // mostly copied and pasted from MGEF
 pub fn writeAll(
-    allocator: std.mem.Allocator,
+    _: std.mem.Allocator,
     dir: std.fs.Dir,
     record_map: std.AutoArrayHashMapUnmanaged(u32, SKIL),
     list_writer: *std.io.BufferedWriter(4096, std.fs.File.Writer),
@@ -98,7 +98,7 @@ pub fn writeAll(
 
         inline for (std.meta.fields(SKIL)[1..]) |field| {
             try json_stream.objectField(field.name);
-            try util.emitField(allocator, &json_stream, @field(v, field.name));
+            try util.emitField(&json_stream, @field(v, field.name));
         }
 
         try json_stream.endObject();

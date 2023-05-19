@@ -298,7 +298,6 @@ pub fn writeAll(
         };
     }
 
-    // TODO: make a buffered writer for each list file
     var list_files: [directory_names.len]std.fs.File = undefined;
     var list_writers: [directory_names.len]std.io.BufferedWriter(
         4096,

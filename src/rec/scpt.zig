@@ -69,7 +69,6 @@ pub fn parse(
 }
 
 inline fn writeVrDt(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -82,7 +81,7 @@ inline fn writeVrDt(
         var split = std.mem.split(u8, scvr[0 .. scvr.len - 1], "\x00");
         while (split.next()) |variable_name| {
             try json_stream.arrayElem();
-            try util.emitAnsiJson(allocator, json_stream, variable_name);
+            try util.emitAnsiJson(json_stream, variable_name);
         }
         try json_stream.endArray();
     } else try json_stream.emitNull();

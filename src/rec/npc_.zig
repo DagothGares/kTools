@@ -214,33 +214,30 @@ pub fn parse(
 }
 
 inline fn writeNpdtAi(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
 ) util.callback_err_type!void {
     const npc = @as(*const NPC_, value);
+    const ignored = std.ComptimeStringMap(void, .{ .{"_garbage"}, .{"attributes"}, .{"skills"} });
 
     try json_stream.objectField("NPDT");
-    // TODO: this kind of looks like code vomit, pls fix
-    if (npc.FLAG & 0x10 != 0) try util.emitField(allocator, json_stream, npc.NPDT.short) else {
+    if (npc.FLAG & 0x10 != 0) try util.emitField(json_stream, npc.NPDT.short) else {
         const long = &npc.NPDT.long;
         try json_stream.beginObject();
         inline for (std.meta.fields(NPDT_52)) |field| {
-            if (comptime std.mem.indexOf(u8, field.name, "_garbage") != null) continue;
+            if (comptime ignored.has(field.name)) continue;
 
             try json_stream.objectField(field.name);
-
-            if (comptime std.ascii.eqlIgnoreCase(field.name, "attributes")) {
-                try std.json.stringify(long.attributes, .{ .string = .Array }, json_stream.stream);
-
-                json_stream.state_index -= 1;
-            } else if (comptime std.ascii.eqlIgnoreCase(field.name, "skills")) {
-                try std.json.stringify(long.skills, .{ .string = .Array }, json_stream.stream);
-
-                json_stream.state_index -= 1;
-            } else try util.emitField(allocator, json_stream, @field(long, field.name));
+            try util.emitField(json_stream, @field(long, field.name));
         }
+        try json_stream.objectField("attributes");
+        try std.json.stringify(long.attributes, .{ .string = .Array }, json_stream.stream);
+        json_stream.state_index -= 1;
+        try json_stream.objectField("skills");
+        try std.json.stringify(long.skills, .{ .string = .Array }, json_stream.stream);
+        json_stream.state_index -= 1;
+
         try json_stream.endObject();
     }
 
@@ -255,7 +252,7 @@ inline fn writeNpdtAi(
 
                     inline for (std.meta.fields(@TypeOf(w))[0..3]) |field| {
                         try json_stream.objectField(field.name);
-                        try util.emitField(allocator, json_stream, @field(w, field.name));
+                        try util.emitField(json_stream, @field(w, field.name));
                     }
                     try json_stream.objectField("idles");
                     try std.json.stringify(w.idles, .{ .string = .Array }, json_stream.stream);
@@ -263,7 +260,7 @@ inline fn writeNpdtAi(
 
                     try json_stream.endObject();
                 },
-                inline else => |ai| try util.emitField(allocator, json_stream, ai),
+                inline else => |ai| try util.emitField(json_stream, ai),
             }
         }
     }

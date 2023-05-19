@@ -76,7 +76,6 @@ pub fn parse(
 }
 
 inline fn writeTv(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     key: []const u8,
     value: anytype,
@@ -86,15 +85,15 @@ inline fn writeTv(
     switch (key[0]) {
         'f' => {
             try json_stream.objectField("FLTV");
-            try util.emitField(allocator, json_stream, gmst.__TV.FL);
+            try util.emitField(json_stream, gmst.__TV.FL);
         },
         'i' => {
             try json_stream.objectField("INTV");
-            try util.emitField(allocator, json_stream, gmst.__TV.IN);
+            try util.emitField(json_stream, gmst.__TV.IN);
         },
         's' => {
             try json_stream.objectField("STRV");
-            try util.emitField(allocator, json_stream, gmst.__TV.ST);
+            try util.emitField(json_stream, gmst.__TV.ST);
         },
         else => unreachable,
     }

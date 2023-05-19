@@ -195,7 +195,6 @@ pub fn parse(
 }
 
 inline fn writeAi(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -212,14 +211,14 @@ inline fn writeAi(
                     try json_stream.beginObject();
                     inline for (std.meta.fields(@TypeOf(w))[0..3]) |field| {
                         try json_stream.objectField(field.name);
-                        try util.emitField(allocator, json_stream, @field(w, field.name));
+                        try util.emitField(json_stream, @field(w, field.name));
                     }
                     try json_stream.objectField("idles");
                     try std.json.stringify(w.idles, .{ .string = .Array }, json_stream.stream);
                     json_stream.state_index -= 1;
                     try json_stream.endObject();
                 },
-                inline else => |ai| try util.emitField(allocator, json_stream, ai),
+                inline else => |ai| try util.emitField(json_stream, ai),
             }
         }
     }

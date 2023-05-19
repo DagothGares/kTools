@@ -79,7 +79,6 @@ pub fn parse(
 }
 
 inline fn writeFields(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -91,9 +90,9 @@ inline fn writeFields(
 
     try json_stream.objectField("FLTV");
     switch (glob.FNAM) {
-        's' => try util.emitField(allocator, json_stream, glob.FLTV.short),
-        'l' => try util.emitField(allocator, json_stream, glob.FLTV.long),
-        'f' => try util.emitField(allocator, json_stream, glob.FLTV.float),
+        's' => try util.emitField(json_stream, glob.FLTV.short),
+        'l' => try util.emitField(json_stream, glob.FLTV.long),
+        'f' => try util.emitField(json_stream, glob.FLTV.float),
         else => unreachable,
     }
 }

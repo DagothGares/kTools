@@ -128,11 +128,11 @@ pub fn writeAll(
         try json_stream.beginObject();
         inline for (std.meta.fields(LEV_)[1..4]) |field| {
             try json_stream.objectField(field.name);
-            try util.emitField(allocator, &json_stream, @field(v, field.name));
+            try util.emitField(&json_stream, @field(v, field.name));
         }
 
         try json_stream.objectField(if (v.lev_ == .LEVC) "CNAM" else "INAM");
-        try util.emitField(allocator, &json_stream, v._NAM);
+        try util.emitField(&json_stream, v._NAM);
 
         try json_stream.endObject();
         try buffered_writer.flush();

@@ -495,7 +495,7 @@ pub fn writeAll(
 
         inline for (std.meta.fields(CELL)[1..5]) |field| {
             try json_stream.objectField(field.name);
-            try util.emitField(allocator, &json_stream, @field(v, field.name));
+            try util.emitField(&json_stream, @field(v, field.name));
         }
 
         try json_stream.objectField("NAM5");
@@ -518,7 +518,7 @@ pub fn writeAll(
             try std.json.stringify(ambi.fog_color, .{ .string = .Array }, json_stream.stream);
             json_stream.state_index -= 1;
             try json_stream.objectField("fog_density");
-            try util.emitField(undefined, &json_stream, ambi.fog_density);
+            try util.emitField(&json_stream, ambi.fog_density);
 
             try json_stream.endObject();
         } else try json_stream.emitNull();
@@ -551,13 +551,13 @@ pub fn writeAll(
                 try json_stream.emitBool(frmr.flag & 0x8 != 0);
 
                 try json_stream.objectField("NAME");
-                try util.emitField(allocator, &json_stream, frmr.NAME);
+                try util.emitField(&json_stream, frmr.NAME);
                 inline for (std.meta.fields(FRMR)[3..]) |field| {
                     // This is backwards from how we usually do it, but it makes the output tons
                     // easier to read.
                     if (@field(frmr, field.name)) |f| {
                         try json_stream.objectField(field.name);
-                        try util.emitField(allocator, &json_stream, f);
+                        try util.emitField(&json_stream, f);
                     }
                 }
                 try json_stream.endObject();
@@ -594,7 +594,7 @@ pub fn writeAll(
 
         inline for (std.meta.fields(CELL)[1..5]) |field| {
             try json_stream.objectField(field.name);
-            try util.emitField(allocator, &json_stream, @field(v, field.name));
+            try util.emitField(&json_stream, @field(v, field.name));
         }
 
         try json_stream.objectField("NAM5");
@@ -617,7 +617,7 @@ pub fn writeAll(
             try std.json.stringify(ambi.fog_color, .{ .string = .Array }, json_stream.stream);
             json_stream.state_index -= 1;
             try json_stream.objectField("fog_density");
-            try util.emitField(undefined, &json_stream, ambi.fog_density);
+            try util.emitField(&json_stream, ambi.fog_density);
 
             try json_stream.endObject();
         } else try json_stream.emitNull();
@@ -650,13 +650,13 @@ pub fn writeAll(
                 try json_stream.emitBool(frmr.flag & 0x8 != 0);
 
                 try json_stream.objectField("NAME");
-                try util.emitField(allocator, &json_stream, frmr.NAME);
+                try util.emitField(&json_stream, frmr.NAME);
                 inline for (std.meta.fields(FRMR)[3..]) |field| {
                     // This is backwards from how we usually do it, but it makes the output tons
                     // easier to read.
                     if (@field(frmr, field.name)) |f| {
                         try json_stream.objectField(field.name);
-                        try util.emitField(allocator, &json_stream, f);
+                        try util.emitField(&json_stream, f);
                     }
                 }
                 try json_stream.endObject();

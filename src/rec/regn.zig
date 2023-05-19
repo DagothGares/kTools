@@ -104,7 +104,11 @@ pub fn parse(
     try record_map.put(allocator, NAME, new_REGN);
 }
 
-inline fn writeCnam(_: std.mem.Allocator, json_stream: anytype, _: []const u8, value: anytype) util.callback_err_type!void {
+inline fn writeCnam(
+    json_stream: anytype,
+    _: []const u8,
+    value: anytype,
+) util.callback_err_type!void {
     const regn = @as(*const REGN, value);
 
     try json_stream.objectField("CNAM");

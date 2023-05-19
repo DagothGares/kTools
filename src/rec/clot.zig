@@ -115,7 +115,6 @@ pub fn parse(
 }
 
 inline fn writeIndx(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -126,14 +125,18 @@ inline fn writeIndx(
     if (clot.INDX) |indx_slice| {
         try json_stream.beginObject();
         for (indx_slice) |indx| {
-            const as_str = try std.fmt.allocPrint(allocator, "{d}", .{indx.index});
-            defer allocator.free(as_str);
-            try json_stream.objectField(as_str);
-            try util.emitField(
-                allocator,
-                json_stream,
-                .{ .bnam = indx.BNAM, .cnam = indx.CNAM },
-            );
+            switch (json_stream.state[json_stream.state_index]) {
+                .complete, .value, .array_start, .array => unreachable,
+                inline .object, .object_start => |known| {
+                    if (known == .object) try json_stream.stream.writeByte(',');
+                    json_stream.state[json_stream.state_index] = .object;
+                    json_stream.state_index += 1;
+                    json_stream.state[json_stream.state_index] = .value;
+                    try json_stream.whitespace.outputIndent(json_stream.stream);
+                    try json_stream.stream.print("\"{d}\": ", .{indx.index});
+                },
+            }
+            try util.emitField(json_stream, .{ .bnam = indx.BNAM, .cnam = indx.CNAM });
         }
         try json_stream.endObject();
     } else try json_stream.emitNull();

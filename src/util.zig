@@ -53,6 +53,7 @@ pub const toUtf8 = struct {
             "\u{0153}", "\x9D", "\u{017E}", "\u{0178}", // 159
         };
     };
+
     var codepage: usize = 1252;
     pub fn set_codepage(page: usize) !void {
         switch (page) {
@@ -60,61 +61,76 @@ pub const toUtf8 = struct {
             else => return error.InvalidCodePage,
         }
     }
-    pub fn european(allocator: std.mem.Allocator, target: []const u8) ![]u8 {
-        var out = try std.ArrayList(u8).initCapacity(allocator, target.len);
-        errdefer out.deinit();
 
+    pub fn european(writer: anytype, target: []const u8) !void {
         for (target) |byte| {
             switch (byte) {
                 0 => break,
-                1...127 => try out.append(byte),
-                128...255 => try out.appendSlice(map_to_utf8.win1250[byte - 128]),
+                1...127 => try writer.writeByte(byte),
+                128...255 => try writer.writeAll(map_to_utf8.win1250[byte - 128]),
             }
         }
-
-        return out.toOwnedSlice();
     }
 
-    pub fn cyrillic(allocator: std.mem.Allocator, target: []const u8) ![]u8 {
-        var out = try std.ArrayList(u8).initCapacity(allocator, target.len);
-        errdefer out.deinit();
-
+    pub fn cyrillic(writer: anytype, target: []const u8) !void {
         for (target) |byte| {
             switch (byte) {
                 0 => break,
-                1...127 => try out.append(byte),
-                128...191 => try out.appendSlice(map_to_utf8.win1251[byte - 128]),
-                192...239 => try out.appendSlice(@ptrCast(*const [2]u8, // todo: simplify
-                    &std.mem.nativeToBig(u16, (0xC380 - 192 + @as(u16, byte))))),
-                240...255 => try out.appendSlice(@ptrCast(*const [2]u8, &std.mem.nativeToBig(u16, (0xD090 - 240 + @as(u16, byte))))),
+                1...127 => try writer.writeByte(byte),
+                128...191 => try writer.writeAll(map_to_utf8.win1251[byte - 128]),
+                192...239 => try writer.writeAll(@ptrCast(
+                    *const [2]u8,
+                    &std.mem.nativeToBig(u16, (0xC380 - 192 + @as(u16, byte))),
+                )),
+                240...255 => try writer.writeAll(@ptrCast(
+                    *const [2]u8,
+                    &std.mem.nativeToBig(u16, (0xD090 - 240 + @as(u16, byte))),
+                )),
             }
         }
-
-        return out.toOwnedSlice();
     }
 
-    pub fn latin(allocator: std.mem.Allocator, target: []const u8) ![]u8 {
-        var out = try std.ArrayList(u8).initCapacity(allocator, target.len);
-        errdefer out.deinit();
+    pub fn latin(writer: anytype, target: []const u8) !void {
         for (target) |byte| {
             switch (byte) {
                 0 => break,
-                1...127 => try out.append(byte),
-                128...159 => try out.appendSlice(map_to_utf8.win1252[byte - 128]),
-                160...191 => try out.appendSlice(@ptrCast(*const [2]u8, &std.mem.nativeToBig(u16, (0xC2A0 - 160 + @as(u16, byte))))),
-                192...255 => try out.appendSlice(@ptrCast(*const [2]u8, &std.mem.nativeToBig(u16, (0xC380 - 192 + @as(u16, byte))))),
+                1...127 => try writer.writeByte(byte),
+                128...159 => try writer.writeAll(map_to_utf8.win1252[byte - 128]),
+                160...191 => try writer.writeAll(@ptrCast(
+                    *const [2]u8,
+                    &std.mem.nativeToBig(u16, (0xC2A0 - 160 + @as(u16, byte))),
+                )),
+                192...255 => try writer.writeAll(@ptrCast(
+                    *const [2]u8,
+                    &std.mem.nativeToBig(
+                        u16,
+                        (0xC380 - 192 + @as(u16, byte)),
+                    ),
+                )),
             }
         }
-
-        return out.toOwnedSlice();
     }
 
-    /// Note: All functions linked here assume the string being read is zero terminated.
+    /// NOTE: Assumes that 'raw' is zero-terminated.
     pub fn convert(allocator: std.mem.Allocator, raw: []const u8) ![]u8 {
+        var out = try std.ArrayList(u8).initCapacity(allocator, raw.len);
+        errdefer out.deinit();
+
+        switch (codepage) {
+            1250 => try european(out.writer(), raw),
+            1251 => try cyrillic(out.writer(), raw),
+            1252 => try latin(out.writer(), raw),
+            else => unreachable,
+        }
+
+        return out.toOwnedSlice();
+    }
+
+    pub fn write(writer: anytype, raw: []const u8) !void {
         return switch (codepage) {
-            1250 => try european(allocator, raw),
-            1251 => try cyrillic(allocator, raw),
-            1252 => try latin(allocator, raw),
+            1250 => try european(writer, raw),
+            1251 => try cyrillic(writer, raw),
+            1252 => try latin(writer, raw),
             else => unreachable,
         };
     }
@@ -136,14 +152,19 @@ test "unicode" {
     try std.testing.expectEqualStrings(right_single_quotation_mark, equivalent_rsqm_2);
 }
 
-/// TODO: this could probably just use a stack allocation
-pub fn emitAnsiJson(allocator: std.mem.Allocator, json_stream: anytype, str: []const u8) !void {
+pub fn emitAnsiJson(json_stream: anytype, str: []const u8) !void {
     const is_utf8 = std.unicode.utf8ValidateSlice(str);
-    const utf8_str = if (is_utf8) str else try toUtf8.convert(allocator, str);
-    defer if (!is_utf8) allocator.free(utf8_str);
-
-    const end_index = std.mem.indexOf(u8, utf8_str, "\x00") orelse utf8_str.len;
-    try json_stream.emitString(utf8_str[0..end_index]);
+    if (!is_utf8) {
+        // This looks kind of dumb, but it lets us avoid an unnecessary allocation
+        var writer = &json_stream.stream;
+        try writer.writeByte('\"');
+        try toUtf8.write(writer, str);
+        try writer.writeByte('\"');
+        json_stream.state_index -= 1;
+    } else {
+        const end_index = std.mem.indexOf(u8, str, "\x00") orelse str.len;
+        try json_stream.emitString(str[0..end_index]);
+    }
 }
 
 pub const callback_err_type = std.os.WriteError || std.mem.Allocator.Error;
@@ -154,10 +175,8 @@ pub fn writeAllGeneric(
     record_map: anytype,
     list_writer: *std.io.BufferedWriter(4096, std.fs.File.Writer),
     comptime max_depth: comptime_int,
-    // TODO: figure out some way to simplify this crap
     comptime ignored_fields: anytype,
     comptime callback: ?fn (
-        allocator: std.mem.Allocator,
         stream: anytype,
         key: []const u8,
         value: anytype,
@@ -169,6 +188,7 @@ pub fn writeAllGeneric(
         .{.{""}});
 
     for (record_map.keys(), record_map.values()) |k, v| {
+        // TODO: this could probably be achieved with stack allocation
         const translated_key = try getValidFilename(allocator, k);
         defer allocator.free(translated_key);
         var sub_key = translated_key;
@@ -197,10 +217,10 @@ pub fn writeAllGeneric(
         inline for (fields[1..]) |field| {
             comptime if (ignored.has(field.name)) continue;
             try json_stream.objectField(field.name);
-            try emitField(allocator, &json_stream, @field(v, field.name));
+            try emitField(&json_stream, @field(v, field.name));
         }
 
-        if (callback) |call| try call(allocator, &json_stream, k, &v);
+        if (callback) |call| try call(&json_stream, k, &v);
 
         try json_stream.endObject();
         try buffered_writer.flush();
@@ -211,7 +231,6 @@ pub fn writeAllGeneric(
 // I'm fairly certain what's being output right now is trash (or at least needs a helping hand
 // from an async i/o interface like io_uring or windows registered IO)
 pub fn emitField(
-    allocator: std.mem.Allocator,
     stream: anytype,
     value: anytype,
 ) !void {
@@ -219,7 +238,6 @@ pub fn emitField(
     switch (@typeInfo(T)) {
         .Bool => return stream.emitBool(value),
         .Optional => if (value) |v| return emitField(
-            allocator,
             stream,
             v,
         ) else return stream.emitNull(),
@@ -227,16 +245,16 @@ pub fn emitField(
             .One => switch (@typeInfo(ptr_info.child)) {
                 .Array => {
                     const Slice = []const std.meta.Elem(ptr_info.child);
-                    return emitField(allocator, stream, @as(Slice, value));
+                    return emitField(stream, @as(Slice, value));
                 },
-                else => return emitField(allocator, stream, value.*),
+                else => return emitField(stream, value.*),
             },
             .Slice => {
-                if (ptr_info.child == u8) return try emitAnsiJson(allocator, stream, value);
+                if (ptr_info.child == u8) return try emitAnsiJson(stream, value);
                 try stream.beginArray();
                 for (value) |v| {
                     try stream.arrayElem();
-                    try emitField(allocator, stream, v);
+                    try emitField(stream, v);
                 }
                 try stream.endArray();
             },
@@ -245,7 +263,7 @@ pub fn emitField(
         .Array => |arr_info| {
             switch (@typeInfo(arr_info.child)) {
                 .Int => {
-                    if (arr_info.child == u8) return emitAnsiJson(allocator, stream, &value);
+                    if (arr_info.child == u8) return emitAnsiJson(stream, &value);
                     try std.json.stringify(value, .{}, stream.stream);
                     stream.state_index -= 1;
                 },
@@ -254,7 +272,7 @@ pub fn emitField(
                     try stream.beginArray();
                     for (value) |v| {
                         try stream.arrayElem();
-                        try emitField(allocator, stream, v);
+                        try emitField(stream, v);
                     }
                     try stream.endArray();
                     stream.whitespace.indent = .{ .space = 2 };
@@ -263,7 +281,7 @@ pub fn emitField(
                     try stream.beginArray();
                     for (value) |v| {
                         try stream.arrayElem();
-                        try emitField(allocator, stream, v);
+                        try emitField(stream, v);
                     }
                     try stream.endArray();
                 },
@@ -274,7 +292,7 @@ pub fn emitField(
             inline for (std.meta.fields(T)) |field| {
                 if (comptime std.mem.indexOf(u8, field.name, "_garbage") != null) continue;
                 try stream.objectField(field.name);
-                try emitField(allocator, stream, @field(value, field.name));
+                try emitField(stream, @field(value, field.name));
             }
             try stream.endObject();
         },
@@ -287,7 +305,7 @@ pub fn emitField(
         },
         .Union => |union_info| if (union_info.tag_type != null) {
             return switch (value) {
-                inline else => |v| return emitField(allocator, stream, v),
+                inline else => |v| return emitField(stream, v),
             };
         } else @compileError("Cannot infer value of non-enumerated union '" ++ @typeName(T) ++ "'"),
         else => @compileError("Not implemented for type '" ++ @typeName(T) ++ "'"),

@@ -135,7 +135,6 @@ pub fn parse(
 }
 
 inline fn writePgrc(
-    _: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -188,7 +187,7 @@ pub fn writeAll(
 
         inline for (std.meta.fields(PGRD)[1..4]) |field| {
             try json_stream.objectField(field.name);
-            try util.emitField(allocator, &json_stream, @field(v, field.name));
+            try util.emitField(&json_stream, @field(v, field.name));
         }
 
         try json_stream.objectField("PGRC");

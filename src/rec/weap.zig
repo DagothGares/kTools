@@ -84,7 +84,6 @@ pub fn parse(
 }
 
 inline fn writeWpdt(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -98,7 +97,7 @@ inline fn writeWpdt(
         if (comptime std.mem.eql(u8, field.name, "attacks")) {
             try std.json.stringify(weap.WPDT.attacks, .{ .string = .Array }, json_stream.stream);
             json_stream.state_index -= 1;
-        } else try util.emitField(allocator, json_stream, @field(weap.WPDT, field.name));
+        } else try util.emitField(json_stream, @field(weap.WPDT, field.name));
     }
     try json_stream.endObject();
 }

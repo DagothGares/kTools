@@ -81,7 +81,6 @@ pub fn parse(
 }
 
 inline fn writeLhdt(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -95,7 +94,7 @@ inline fn writeLhdt(
         if (comptime std.mem.eql(u8, field.name, "color")) {
             try std.json.stringify(lhdt.color, .{ .string = .Array }, json_stream.stream);
             json_stream.state_index -= 1;
-        } else try util.emitField(allocator, json_stream, @field(lhdt, field.name));
+        } else try util.emitField(json_stream, @field(lhdt, field.name));
     }
     try json_stream.endObject();
 }

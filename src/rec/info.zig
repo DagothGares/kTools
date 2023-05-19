@@ -174,7 +174,6 @@ pub fn parse(
 }
 
 pub inline fn writeAll(
-    allocator: std.mem.Allocator,
     json_stream: anytype,
     _: []const u8,
     value: anytype,
@@ -186,7 +185,7 @@ pub inline fn writeAll(
     try json_stream.beginObject();
     for (info_map.keys(), info_map.values()) |k, v| {
         try json_stream.objectField(k[0 .. k.len - 1]);
-        try util.emitField(allocator, json_stream, v);
+        try util.emitField(json_stream, v);
     }
     try json_stream.endObject();
 }
