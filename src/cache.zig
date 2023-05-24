@@ -3,9 +3,6 @@ const util = @import("util.zig");
 const recs = util.recs;
 const subs = util.subs;
 
-// TODO: it seems to be valid for a record to simply contain the identifier and 'DELE' as a method
-// of deleting it; specifically, it seems that Morrowind simply skips the rest of the record
-// (or subrecord group, in the case of FRMRs) when it finds a DELE subrecord.
 const impl = struct {
     pub const TES3 = @import("rec/tes3.zig");
     pub const ACTI = @import("rec/acti.zig");

@@ -215,6 +215,8 @@ inline fn writeAi(
             switch (ai_union) {
                 .W => |w| {
                     try json_stream.beginObject();
+                    try json_stream.objectField("ai_type");
+                    try json_stream.emitString("W");
                     inline for (std.meta.fields(@TypeOf(w))[0..3]) |field| {
                         try json_stream.objectField(field.name);
                         try util.emitField(json_stream, @field(w, field.name));
@@ -224,7 +226,16 @@ inline fn writeAi(
                     json_stream.state_index -= 1;
                     try json_stream.endObject();
                 },
-                inline else => |ai| try util.emitField(json_stream, ai),
+                inline else => |ai| {
+                    try json_stream.beginObject();
+                    try json_stream.objectField("ai_type");
+                    try json_stream.emitString(@tagName(ai_union));
+                    inline for (std.meta.fields(@TypeOf(ai))) |field| {
+                        try json_stream.objectField(field.name);
+                        try util.emitField(json_stream, @field(ai, field.name));
+                    }
+                    try json_stream.endObject();
+                },
             }
         }
     }
