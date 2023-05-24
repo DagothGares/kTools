@@ -30,10 +30,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_INGR: INGR = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         IRDT: bool = false,
     } = .{};
@@ -44,13 +43,12 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_INGR.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
             .MODL => {
-                if (meta.MODL) return error.subrecordRedeclared;
+                if (meta.MODL) return error.SubrecordRedeclared;
                 meta.MODL = true;
 
                 new_INGR.MODL = subrecord.payload;
@@ -71,11 +69,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_INGR.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_INGR);
+        return record_map.put(allocator, name, new_INGR);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

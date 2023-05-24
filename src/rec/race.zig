@@ -32,10 +32,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_RACE: RACE = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         FNAM: bool = false,
         RADT: bool = false,
     } = .{};
@@ -49,8 +48,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_RACE.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -76,16 +74,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_RACE.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |race| if (race.NPCS) |npcs| allocator.free(npcs);
+        if (record_map.get(name)) |race| if (race.NPCS) |npcs| allocator.free(npcs);
 
-    if (new_NPCS.items.len > 0) new_RACE.NPCS = try new_NPCS.toOwnedSlice(allocator);
-    errdefer if (new_RACE.NPCS) |npcs| allocator.free(npcs);
+        if (new_NPCS.items.len > 0) new_RACE.NPCS = try new_NPCS.toOwnedSlice(allocator);
+        errdefer if (new_RACE.NPCS) |npcs| allocator.free(npcs);
 
-    try record_map.put(allocator, NAME, new_RACE);
+        return record_map.put(allocator, name, new_RACE);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

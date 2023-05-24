@@ -3,6 +3,9 @@ const util = @import("util.zig");
 const recs = util.recs;
 const subs = util.subs;
 
+// TODO: it seems to be valid for a record to simply contain the identifier and 'DELE' as a method
+// of deleting it; specifically, it seems that Morrowind simply skips the rest of the record
+// (or subrecord group, in the case of FRMRs) when it finds a DELE subrecord.
 const impl = struct {
     pub const TES3 = @import("rec/tes3.zig");
     pub const ACTI = @import("rec/acti.zig");
@@ -229,20 +232,15 @@ pub fn cachePlugin(
                     const info_start = try iterator.stream.getPos() - next_rec.payload.len - 16;
                     try logger.debug("{s}: INFO at 0x{X}\n", .{ short_name, info_start });
 
-                    const info = try impl.INFO.parse(
+                    try impl.INFO.parse(
                         allocator,
                         logger,
                         short_name,
+                        &dial.INFO,
                         next_rec.payload,
                         @intCast(u32, info_start + 16),
                         record.flag,
                     );
-                    errdefer if (info.payload.SCVR) |scvr| allocator.free(scvr);
-
-                    if (dial.INFO.getPtr(info.INAM)) |old_info| {
-                        if (old_info.SCVR) |scvr| allocator.free(scvr);
-                        old_info.* = info.payload;
-                    } else try dial.INFO.putNoClobber(allocator, info.INAM, info.payload);
                 }
             },
             inline .LEVC, .LEVI => |known| {

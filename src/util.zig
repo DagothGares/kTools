@@ -6,15 +6,16 @@ pub const Logger = @import("util/Logger.zig");
 pub const iterators = @import("util/iterators.zig");
 pub const SubrecordIterator = iterators.SubrecordIterator(std.io.FixedBufferStream([]const u8));
 
-// TODO: make writer versions of these so we don't have to pass an allocator
 pub const toUtf8 = struct {
+    // Invalid characters are replaced with \u{FFFD}, the Unicode Replacement Character. Used so
+    // people who accidentally mix plugins with different codepages don't cause a crash.
     const map_to_utf8 = struct {
         /// Central/Eastern European languages
         pub const win1250 = [_][]const u8{
-            "\u{20AC}", "\x81", "\u{201A}", "\x83", "\u{201E}", "\u{2026}", "\u{2020}", // 134
-            "\u{2021}", "\x88", "\u{2030}", "\u{0160}", "\u{2039}", "\u{015A}", "\u{0164}", // 141
-            "\u{017D}", "\u{0179}", "\x90", "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", // 148
-            "\u{2022}", "\u{2013}", "\u{2014}", "\x98", "\u{2122}", "\u{0161}", "\u{203A}", // 155
+            "\u{20AC}", "\u{FFFD}", "\u{201A}", "\u{FFFD}", "\u{201E}", "\u{2026}", "\u{2020}", // 134
+            "\u{2021}", "\u{FFFD}", "\u{2030}", "\u{0160}", "\u{2039}", "\u{015A}", "\u{0164}", // 141
+            "\u{017D}", "\u{0179}", "\u{FFFD}", "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", // 148
+            "\u{2022}", "\u{2013}", "\u{2014}", "\u{FFFD}", "\u{2122}", "\u{0161}", "\u{203A}", // 155
             "\u{015B}", "\u{0165}", "\u{017E}", "\u{017A}", "\u{00A0}", "\u{02C7}", "\u{02D8}", // 162
             "\u{0141}", "\u{00A4}", "\u{0104}", "\u{00A6}", "\u{00A7}", "\u{00A8}", "\u{00A9}", // 169
             "\u{015E}", "\u{00AB}", "\u{00AC}", "\u{00AD}", "\u{00AE}", "\u{017B}", "\u{00B0}", // 176
@@ -36,7 +37,7 @@ pub const toUtf8 = struct {
             "\u{0402}", "\u{0403}", "\u{201A}", "\u{0453}", "\u{201E}", "\u{2026}", "\u{2020}", // 134
             "\u{2021}", "\u{20AC}", "\u{2030}", "\u{0409}", "\u{2039}", "\u{040A}", "\u{040C}", // 141
             "\u{040B}", "\u{040F}", "\u{0452}", "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", // 148
-            "\u{2022}", "\u{2013}", "\u{2014}", "\x98", "\u{2122}", "\u{0459}", "\u{203A}", // 155
+            "\u{2022}", "\u{2013}", "\u{2014}", "\u{FFFD}", "\u{2122}", "\u{0459}", "\u{203A}", // 155
             "\u{045A}", "\u{045C}", "\u{045B}", "\u{045F}", "\u{00A0}", "\u{040E}", "\u{045E}", // 162
             "\u{0408}", "\u{00A4}", "\u{0490}", "\u{00A6}", "\u{00A7}", "\u{0401}", "\u{00A9}", // 169
             "\u{0404}", "\u{00AB}", "\u{00AC}", "\u{00AD}", "\u{00AE}", "\u{0407}", "\u{00B0}", // 176
@@ -46,11 +47,11 @@ pub const toUtf8 = struct {
         };
         /// Latin-derived languages (default)
         pub const win1252 = [_][]const u8{
-            "\u{20AC}", "\x81", "\u{201A}", "\u{0192}", "\u{201E}", "\u{2026}", "\u{2020}", // 134
-            "\u{2021}", "\u{02C6}", "\u{2030}", "\u{0160}", "\u{2039}", "\u{0152}", "\x8D", // 141
-            "\u{017D}", "\x8F", "\x90", "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", // 148
+            "\u{20AC}", "\u{FFFD}", "\u{201A}", "\u{0192}", "\u{201E}", "\u{2026}", "\u{2020}", // 134
+            "\u{2021}", "\u{02C6}", "\u{2030}", "\u{0160}", "\u{2039}", "\u{0152}", "\u{FFFD}", // 141
+            "\u{017D}", "\u{FFFD}", "\u{FFFD}", "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", // 148
             "\u{2022}", "\u{2013}", "\u{2014}", "\u{02DC}", "\u{2122}", "\u{0161}", "\u{203A}", // 155
-            "\u{0153}", "\x9D", "\u{017E}", "\u{0178}", // 159
+            "\u{0153}", "\u{FFFD}", "\u{017E}", "\u{0178}", // 159
         };
     };
 
@@ -348,11 +349,7 @@ pub fn getValidFilename(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
     if (is_windows) raw_copy[0] = '_';
 
     _ = std.ascii.lowerString(raw_copy[0 + @boolToInt(prefixed) ..], str);
-    std.mem.copy(
-        u8,
-        raw_copy[raw_copy.len - 5 ..],
-        ".json",
-    );
+    @memcpy(raw_copy[raw_copy.len - 5 ..], ".json");
     for (raw_copy[0 .. raw_copy.len - 5]) |*c| {
         switch (c.*) {
             '<', '>', '\"', '|', '*', '?', '\r', '\n', '\t' => c.* = '_',

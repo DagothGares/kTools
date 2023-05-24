@@ -32,10 +32,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_LAND: LAND = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INTV: u64 = undefined;
+    var INTV: ?u64 = null;
 
     var meta: struct {
-        INTV: bool = false,
         DATA: bool = false,
     } = .{};
 
@@ -45,10 +44,9 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_LAND.deleted = true,
             .INTV => {
-                if (meta.INTV) return error.SubrecordRedeclared;
-                meta.INTV = true;
+                if (INTV != null) return error.SubrecordRedeclared;
 
-                INTV = @ptrCast(*align(4) const u64, &util.getLittle([2]i32, subrecord.payload)).*;
+                INTV = @bitCast(u64, util.getLittle([2]i32, subrecord.payload));
             },
             .DATA => {
                 if (meta.DATA) return error.SubrecordRedeclared;
@@ -79,11 +77,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (INTV) |intv| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_LAND.deleted) {
+                    if (record_map.getPtr(intv)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, INTV, new_LAND);
+        return record_map.put(allocator, intv, new_LAND);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

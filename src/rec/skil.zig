@@ -25,10 +25,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SKIL: SKIL = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INDX: u32 = undefined;
+    var INDX: ?u32 = null;
 
     var meta: struct {
-        INDX: bool = false,
         SKDT: bool = false,
     } = .{};
 
@@ -38,8 +37,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_SKIL.deleted = true,
             .INDX => {
-                if (meta.INDX) return error.SubrecordRedeclared;
-                meta.INDX = true;
+                if (INDX != null) return error.SubrecordRedeclared;
 
                 INDX = util.getLittle(u32, subrecord.payload);
             },
@@ -58,11 +56,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (INDX) |indx| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_SKIL.deleted) {
+                    if (record_map.getPtr(indx)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, INDX, new_SKIL);
+        return record_map.put(allocator, indx, new_SKIL);
+    } else return error.MissingRequiredSubrecord;
 }
 
 // mostly copied and pasted from MGEF

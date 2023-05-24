@@ -18,13 +18,10 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_GMST: GMST = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: []const u8 = undefined;
-
-    // nullable unions crash the compiler for some reason, so we have to do this instead
-    var has_TV = false;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
+        __TV: bool = false,
     } = .{};
 
     var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
@@ -33,14 +30,13 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_GMST.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
             inline .FLTV, .INTV, .STRV => |known| {
-                if (has_TV) return error.SubrecordRedeclared;
-                has_TV = true;
+                if (meta.__TV) return error.SubrecordRedeclared;
+                meta.__TV = true;
 
                 const tag = switch (known) {
                     .FLTV => "FL",
@@ -61,18 +57,16 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        if (!meta.__TV) switch (name[0]) {
+            'f' => new_GMST.__TV = .{ .FL = 0 },
+            'i' => new_GMST.__TV = .{ .IN = 0 },
+            's' => new_GMST.__TV = .{ .ST = "" },
+            else => return error.Invalid_GMST_Tag,
+        };
 
-    if (!has_TV) switch (NAME[0]) {
-        'f' => new_GMST.__TV = .{ .FL = 0 },
-        'i' => new_GMST.__TV = .{ .IN = 0 },
-        's' => new_GMST.__TV = .{ .ST = "" },
-        else => return error.Invalid_GMST_Tag,
-    };
-
-    try record_map.put(allocator, NAME, new_GMST);
+        return record_map.put(allocator, name, new_GMST);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeTv(

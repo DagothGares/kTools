@@ -38,10 +38,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_FACT: FACT = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         FNAM: bool = false,
         FADT: bool = false,
     } = .{};
@@ -57,8 +56,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_FACT.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -92,30 +90,35 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
-
-    if (record_map.get(NAME)) |fact| {
-        if (fact.RNAM) |rnam| allocator.free(rnam);
-        if (fact.ANAM) |anam| allocator.free(anam);
-    }
-
-    if (new_RNAM.items.len > 0) new_FACT.RNAM = try new_RNAM.toOwnedSlice(allocator);
-    errdefer if (new_FACT.RNAM) |rnam| allocator.free(rnam);
-
-    if (new_ANAM.count() > 0) {
-        new_FACT.ANAM = try allocator.alloc(ANAM, new_ANAM.count());
-        for (new_FACT.ANAM.?, new_ANAM.keys(), new_ANAM.values()) |*anam, k, v| {
-            anam.* = .{
-                .faction = k,
-                .reaction = v,
-            };
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_FACT.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
         }
-    }
-    errdefer if (new_FACT.ANAM) |anam| allocator.free(anam);
 
-    try record_map.put(allocator, NAME, new_FACT);
+        if (record_map.get(name)) |fact| {
+            if (fact.RNAM) |rnam| allocator.free(rnam);
+            if (fact.ANAM) |anam| allocator.free(anam);
+        }
+
+        if (new_RNAM.items.len > 0) new_FACT.RNAM = try new_RNAM.toOwnedSlice(allocator);
+        errdefer if (new_FACT.RNAM) |rnam| allocator.free(rnam);
+
+        if (new_ANAM.count() > 0) {
+            new_FACT.ANAM = try allocator.alloc(ANAM, new_ANAM.count());
+            for (new_FACT.ANAM.?, new_ANAM.keys(), new_ANAM.values()) |*anam, k, v| {
+                anam.* = .{ .faction = k, .reaction = v };
+            }
+        }
+        errdefer if (new_FACT.ANAM) |anam| allocator.free(anam);
+
+        return record_map.put(allocator, name, new_FACT);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeAnam(

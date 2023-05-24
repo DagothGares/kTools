@@ -8,7 +8,7 @@ const INFO = @import("info.zig");
 deleted: bool,
 DATA: u8 = undefined,
 // TODO: this should probably just be a linked list instead
-INFO: std.StringArrayHashMapUnmanaged(INFO.payload_type) = .{},
+INFO: std.StringArrayHashMapUnmanaged(INFO) = .{},
 
 const DIAL = @This();
 
@@ -22,10 +22,9 @@ pub fn parse(
     flag: u32,
 ) !*DIAL {
     var new_DIAL: DIAL = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         DATA: bool = false,
     } = .{};
 
@@ -35,8 +34,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_DIAL.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -50,17 +48,22 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        const dial = try record_map.getOrPut(allocator, name);
+        const ptr = dial.value_ptr;
+        ptr.deleted = new_DIAL.deleted;
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_DIAL.deleted and dial.found_existing) return ptr;
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    const dial = try record_map.getOrPut(allocator, NAME);
-    const ptr = dial.value_ptr;
-    ptr.deleted = new_DIAL.deleted;
-    ptr.DATA = new_DIAL.DATA;
-    if (!dial.found_existing) ptr.INFO = .{};
+        ptr.DATA = new_DIAL.DATA;
+        if (!dial.found_existing) ptr.INFO = .{};
 
-    return ptr;
+        return ptr;
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

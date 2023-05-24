@@ -22,10 +22,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_DOOR: DOOR = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
     } = .{};
 
@@ -35,8 +34,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_DOOR.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -56,11 +54,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_DOOR.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_DOOR);
+        return record_map.put(allocator, name, new_DOOR);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

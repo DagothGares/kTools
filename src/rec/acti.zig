@@ -20,22 +20,22 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_ACTI: ACTI = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         FNAM: bool = false,
     } = .{};
 
     var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
 
+    // TODO: integrate pointers to the logger and the plugin_name in the iterator itself,
+    // so it only needs the start value
     while (try iterator.next(logger, plugin_name, start)) |subrecord| {
         switch (subrecord.tag) {
             .DELE => new_ACTI.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -55,11 +55,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_ACTI.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_ACTI);
+        return record_map.put(allocator, name, new_ACTI);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

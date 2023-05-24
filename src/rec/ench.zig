@@ -28,10 +28,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_ENCH: ENCH = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         ENDT: bool = false,
     } = .{};
 
@@ -44,8 +43,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_ENCH.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -60,16 +58,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_ENCH.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |ench| if (ench.ENAM) |enam| allocator.free(enam);
+        if (record_map.get(name)) |ench| if (ench.ENAM) |enam| allocator.free(enam);
 
-    if (new_ENAM.items.len > 0) new_ENCH.ENAM = try new_ENAM.toOwnedSlice(allocator);
-    errdefer if (new_ENCH.ENAM) |enam| allocator.free(enam);
+        if (new_ENAM.items.len > 0) new_ENCH.ENAM = try new_ENAM.toOwnedSlice(allocator);
+        errdefer if (new_ENCH.ENAM) |enam| allocator.free(enam);
 
-    try record_map.put(allocator, NAME, new_ENCH);
+        return record_map.put(allocator, name, new_ENCH);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

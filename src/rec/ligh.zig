@@ -32,10 +32,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_LIGH: LIGH = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         LHDT: bool = false,
     } = .{};
@@ -46,13 +45,12 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_LIGH.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
             .MODL => {
-                if (meta.MODL) return error.subrecordRedeclared;
+                if (meta.MODL) return error.SubrecordRedeclared;
                 meta.MODL = true;
 
                 new_LIGH.MODL = subrecord.payload;
@@ -73,11 +71,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_LIGH.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_LIGH);
+        return record_map.put(allocator, name, new_LIGH);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeLhdt(
@@ -90,12 +96,14 @@ inline fn writeLhdt(
     try json_stream.objectField("LHDT");
     try json_stream.beginObject();
     inline for (std.meta.fields(LHDT)[1..]) |field| {
+        if (comptime std.mem.eql(u8, field.name, "color")) continue;
         try json_stream.objectField(field.name);
-        if (comptime std.mem.eql(u8, field.name, "color")) {
-            try std.json.stringify(lhdt.color, .{ .string = .Array }, json_stream.stream);
-            json_stream.state_index -= 1;
-        } else try util.emitField(json_stream, @field(lhdt, field.name));
+        try util.emitField(json_stream, @field(lhdt, field.name));
     }
+    try json_stream.objectField("color");
+    try std.json.stringify(lhdt.color, .{ .string = .Array }, json_stream.stream);
+    json_stream.state_index -= 1;
+
     try json_stream.endObject();
 }
 

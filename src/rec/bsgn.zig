@@ -12,7 +12,7 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 deleted: bool,
-FNAM: ?[]const u8 = null,
+FNAM: []const u8 = undefined,
 TNAM: ?[]const u8 = null,
 DESC: ?[]const u8 = null,
 NPCS: ?[][]const u8 = null,
@@ -29,10 +29,10 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_BSGN: BSGN = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
+        FNAM: bool = false,
     } = .{};
 
     var new_NPCS: std.ArrayListUnmanaged([]const u8) = .{};
@@ -44,12 +44,17 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_BSGN.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
-            inline .FNAM, .TNAM, .DESC => |known| {
+            .FNAM => {
+                if (meta.FNAM) return error.SubrecordRedeclared;
+                meta.FNAM = true;
+
+                new_BSGN.FNAM = subrecord.payload;
+            },
+            inline .TNAM, .DESC => |known| {
                 const tag = @tagName(known);
                 if (@field(new_BSGN, tag) != null) return error.SubrecordRedeclared;
 
@@ -65,16 +70,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_BSGN.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |bsgn| if (bsgn.NPCS) |NPCS| allocator.free(NPCS);
+        if (record_map.get(name)) |bsgn| if (bsgn.NPCS) |NPCS| allocator.free(NPCS);
 
-    if (new_NPCS.items.len > 0) new_BSGN.NPCS = try new_NPCS.toOwnedSlice(allocator);
-    errdefer if (new_BSGN.NPCS) |npcs| allocator.free(npcs);
+        if (new_NPCS.items.len > 0) new_BSGN.NPCS = try new_NPCS.toOwnedSlice(allocator);
+        errdefer if (new_BSGN.NPCS) |npcs| allocator.free(npcs);
 
-    try record_map.put(allocator, NAME, new_BSGN);
+        return record_map.put(allocator, name, new_BSGN);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

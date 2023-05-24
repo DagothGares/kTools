@@ -40,10 +40,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_REGN: REGN = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         FNAM: bool = false,
         CNAM: bool = false,
         WEAT: bool = false,
@@ -58,8 +57,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_REGN.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -80,7 +78,7 @@ pub fn parse(
                 meta.WEAT = true;
 
                 std.debug.assert(subrecord.payload.len <= 10);
-                std.mem.copy(u8, @ptrCast(*[10]u8, &new_REGN.WEAT), subrecord.payload);
+                std.mem.copyForwards(u8, @ptrCast(*[10]u8, &new_REGN.WEAT), subrecord.payload);
             },
             .BNAM => {
                 if (new_REGN.BNAM != null) return error.SubrecordRedeclared;
@@ -92,16 +90,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_REGN.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |weat| if (weat.SNAM) |snam| allocator.free(snam);
+        if (record_map.get(name)) |weat| if (weat.SNAM) |snam| allocator.free(snam);
 
-    if (new_SNAM.items.len > 0) new_REGN.SNAM = try new_SNAM.toOwnedSlice(allocator);
-    errdefer if (new_REGN.SNAM) |snam| allocator.free(snam);
+        if (new_SNAM.items.len > 0) new_REGN.SNAM = try new_SNAM.toOwnedSlice(allocator);
+        errdefer if (new_REGN.SNAM) |snam| allocator.free(snam);
 
-    try record_map.put(allocator, NAME, new_REGN);
+        return record_map.put(allocator, name, new_REGN);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeCnam(
@@ -109,10 +115,10 @@ inline fn writeCnam(
     _: []const u8,
     value: anytype,
 ) util.callback_err_type!void {
-    const regn = @as(*const REGN, value);
+    const cnam = @as(*const REGN, value).CNAM;
 
     try json_stream.objectField("CNAM");
-    try std.json.stringify(regn.CNAM, .{ .string = .Array }, json_stream.stream);
+    try std.json.stringify(cnam, .{ .string = .Array }, json_stream.stream);
     json_stream.state_index -= 1;
 }
 

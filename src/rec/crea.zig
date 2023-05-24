@@ -50,10 +50,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_CREA: CREA = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         NPDT: bool = false,
         FLAG: bool = false,
@@ -75,8 +74,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_CREA.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -168,30 +166,38 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_CREA.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |crea| {
-        if (crea.NPCO) |npco| allocator.free(npco);
-        if (crea.NPCS) |npcs| allocator.free(npcs);
-        if (crea.DODT) |dodt| allocator.free(dodt);
-        if (crea.AI__) |ai__| allocator.free(ai__);
-    }
+        if (record_map.get(name)) |crea| {
+            if (crea.NPCO) |npco| allocator.free(npco);
+            if (crea.NPCS) |npcs| allocator.free(npcs);
+            if (crea.DODT) |dodt| allocator.free(dodt);
+            if (crea.AI__) |ai__| allocator.free(ai__);
+        }
 
-    if (new_NPCO.items.len > 0) new_CREA.NPCO = try new_NPCO.toOwnedSlice(allocator);
-    errdefer if (new_CREA.NPCO) |npco| allocator.free(npco);
+        if (new_NPCO.items.len > 0) new_CREA.NPCO = try new_NPCO.toOwnedSlice(allocator);
+        errdefer if (new_CREA.NPCO) |npco| allocator.free(npco);
 
-    if (new_NPCS.items.len > 0) new_CREA.NPCS = try new_NPCS.toOwnedSlice(allocator);
-    errdefer if (new_CREA.NPCS) |npcs| allocator.free(npcs);
+        if (new_NPCS.items.len > 0) new_CREA.NPCS = try new_NPCS.toOwnedSlice(allocator);
+        errdefer if (new_CREA.NPCS) |npcs| allocator.free(npcs);
 
-    if (new_DODT.items.len > 0) new_CREA.DODT = try new_DODT.toOwnedSlice(allocator);
-    errdefer if (new_CREA.DODT) |dodt| allocator.free(dodt);
+        if (new_DODT.items.len > 0) new_CREA.DODT = try new_DODT.toOwnedSlice(allocator);
+        errdefer if (new_CREA.DODT) |dodt| allocator.free(dodt);
 
-    if (new_AI.items.len > 0) new_CREA.AI__ = try new_AI.toOwnedSlice(allocator);
-    errdefer if (new_CREA.AI__) |ai__| allocator.free(ai__);
+        if (new_AI.items.len > 0) new_CREA.AI__ = try new_AI.toOwnedSlice(allocator);
+        errdefer if (new_CREA.AI__) |ai__| allocator.free(ai__);
 
-    try record_map.put(allocator, NAME, new_CREA);
+        return record_map.put(allocator, name, new_CREA);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeAi(

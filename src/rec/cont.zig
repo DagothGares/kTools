@@ -25,10 +25,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_CONT: CONT = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         CNDT: bool = false,
         FLAG: bool = false,
@@ -43,9 +42,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_CONT.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
-
+                if (NAME != null) return error.SubrecordRedeclared;
                 NAME = subrecord.payload;
             },
             .MODL => {
@@ -77,16 +74,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_CONT.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |cont| if (cont.NPCO) |npco| allocator.free(npco);
+        if (record_map.get(name)) |cont| if (cont.NPCO) |npco| allocator.free(npco);
 
-    if (new_NPCO.items.len > 0) new_CONT.NPCO = try new_NPCO.toOwnedSlice(allocator);
-    errdefer if (new_CONT.NPCO) |npco| allocator.free(npco);
+        if (new_NPCO.items.len > 0) new_CONT.NPCO = try new_NPCO.toOwnedSlice(allocator);
+        errdefer if (new_CONT.NPCO) |npco| allocator.free(npco);
 
-    try record_map.put(allocator, NAME, new_CONT);
+        return record_map.put(allocator, name, new_CONT);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

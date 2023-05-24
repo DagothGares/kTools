@@ -22,26 +22,21 @@ const SCVR = struct {
     __TV: ?union(enum) { IN: u32, FL: f32 } = null,
 };
 
-pub const payload_type = struct {
-    // bottom bit is the deletion flag, top 2 are an enum for QSTN/QSTF/QSTR/null
-    flags: u3 = 0,
-    PNAM: ?[]const u8 = null,
-    NNAM: ?[]const u8 = null,
-    DATA: ?DATA = null,
-    ONAM: ?[]const u8 = null,
-    RNAM: ?[]const u8 = null,
-    CNAM: ?[]const u8 = null,
-    FNAM: ?[]const u8 = null,
-    ANAM: ?[]const u8 = null,
-    DNAM: ?[]const u8 = null,
-    SNAM: ?[]const u8 = null,
-    NAME: ?[]const u8 = null,
-    BNAM: ?[]const u8 = null,
-    SCVR: ?[]SCVR = null,
-};
-
-INAM: []const u8 = undefined,
-payload: payload_type,
+// bottom bit is the deletion flag, top 2 are an enum for QSTN/QSTF/QSTR/null
+flag: u3 = 0,
+PNAM: []const u8 = undefined,
+NNAM: []const u8 = undefined,
+DATA: ?DATA = null,
+ONAM: ?[]const u8 = null,
+RNAM: ?[]const u8 = null,
+CNAM: ?[]const u8 = null,
+FNAM: ?[]const u8 = null,
+ANAM: ?[]const u8 = null,
+DNAM: ?[]const u8 = null,
+SNAM: ?[]const u8 = null,
+NAME: ?[]const u8 = null,
+BNAM: ?[]const u8 = null,
+SCVR: ?[]SCVR = null,
 
 const INFO = @This();
 
@@ -49,44 +44,53 @@ pub fn parse(
     allocator: std.mem.Allocator,
     logger: util.Logger,
     plugin_name: []const u8,
+    record_map: *std.StringArrayHashMapUnmanaged(INFO),
     record: []const u8,
     start: u64,
     flag: u32,
-) !INFO {
-    var new_INFO: INFO = .{ .payload = .{ .flags = util.truncateRecordFlag(flag) & 0x1 } };
+) !void {
+    var new_INFO: INFO = .{ .flag = util.truncateRecordFlag(flag) & 0x1 };
+    var INAM: ?[]const u8 = null;
 
     var new_SCVR: std.ArrayListUnmanaged(SCVR) = .{};
     defer new_SCVR.deinit(allocator);
 
     var meta: struct {
-        INAM: bool = false,
+        PNAM: bool = false,
+        NNAM: bool = false,
     } = .{};
 
     var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
 
     while (try iterator.next(logger, plugin_name, start)) |subrecord| {
         switch (subrecord.tag) {
-            .DELE => new_INFO.payload.flags |= 0x1,
+            .DELE => new_INFO.flag |= 0x1,
             .INAM => {
-                if (meta.INAM) return error.SubrecordRedeclared;
-                meta.INAM = true;
+                if (INAM != null) return error.SubrecordRedeclared;
 
-                new_INFO.INAM = subrecord.payload;
+                INAM = subrecord.payload;
+            },
+            inline .PNAM, .NNAM => |known| {
+                const tag = @tagName(known);
+                if (@field(meta, tag)) return error.SubrecordRedeclared;
+                @field(meta, tag) = true;
+
+                @field(new_INFO, tag) = subrecord.payload;
             },
             .DATA => {
-                if (new_INFO.payload.DATA != null) return error.SubrecordRedeclared;
+                if (new_INFO.DATA != null) return error.SubrecordRedeclared;
 
-                new_INFO.payload.DATA = util.getLittle(DATA, subrecord.payload[4..11]);
+                new_INFO.DATA = util.getLittle(DATA, subrecord.payload[4..11]);
             },
             .FNAM => {
-                if (new_INFO.payload.FNAM != null) return error.SubrecordRedeclared;
+                if (new_INFO.FNAM != null) return error.SubrecordRedeclared;
 
                 // bethesda-ism; they used a value to represent null when they could have just...
                 // made it null, since it's a string (or not included it at all)
                 if (!(subrecord.payload.len == 5 and
                     std.ascii.eqlIgnoreCase(subrecord.payload, "FFFF")))
                 {
-                    new_INFO.payload.FNAM = subrecord.payload;
+                    new_INFO.FNAM = subrecord.payload;
                 }
             },
             .SCVR => {
@@ -134,7 +138,7 @@ pub fn parse(
                 try new_SCVR.append(allocator, scvr);
             },
             inline .QSTN, .QSTF, .QSTR => |known| {
-                if (new_INFO.payload.flags > 0x1) return error.SubrecordRedeclared;
+                if (new_INFO.flag > 0x1) return error.SubrecordRedeclared;
 
                 const setting = switch (known) {
                     .QSTN => 0x1,
@@ -142,35 +146,35 @@ pub fn parse(
                     .QSTR => 0x3,
                     else => unreachable,
                 };
-                new_INFO.payload.flags |= setting << 1;
+                new_INFO.flag |= setting << 1;
             },
-            inline .PNAM,
-            .NNAM,
-            .ONAM,
-            .RNAM,
-            .CNAM,
-            .ANAM,
-            .DNAM,
-            .SNAM,
-            .NAME,
-            .BNAM,
-            => |known| {
+            inline .ONAM, .RNAM, .CNAM, .ANAM, .DNAM, .SNAM, .NAME, .BNAM => |known| {
                 const tag = @tagName(known);
-                if (@field(new_INFO.payload, tag) != null) return error.SubrecordRedeclared;
+                if (@field(new_INFO, tag) != null) return error.SubrecordRedeclared;
 
-                @field(new_INFO.payload, tag) = subrecord.payload;
+                @field(new_INFO, tag) = subrecord.payload;
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (INAM) |inam| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_INFO.flag & 0x1 != 0) {
+                    if (record_map.getPtr(inam)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (new_SCVR.items.len > 0) new_INFO.payload.SCVR = try new_SCVR.toOwnedSlice(allocator);
+        if (record_map.get(inam)) |info| if (info.SCVR) |scvr| allocator.free(scvr);
 
-    return new_INFO;
+        if (new_SCVR.items.len > 0) new_INFO.SCVR = try new_SCVR.toOwnedSlice(allocator);
+
+        return record_map.put(allocator, inam, new_INFO);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub inline fn writeAll(

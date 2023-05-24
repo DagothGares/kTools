@@ -39,10 +39,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_MGEF: MGEF = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INDX: u32 = undefined;
+    var INDX: ?u32 = null;
 
     var meta: struct {
-        INDX: bool = false,
         MEDT: bool = false,
     } = .{};
 
@@ -52,8 +51,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_MGEF.deleted = true,
             .INDX => {
-                if (meta.INDX) return error.SubrecordRedeclared;
-                meta.INDX = true;
+                if (INDX != null) return error.SubrecordRedeclared;
 
                 INDX = util.getLittle(u32, subrecord.payload);
             },
@@ -63,18 +61,10 @@ pub fn parse(
 
                 new_MGEF.MEDT = util.getLittle(MEDT, subrecord.payload);
             },
-            inline .ITEX,
-            .PTEX,
-            .BSND,
-            .CSND,
-            .HSND,
-            .ASND,
-            .CVFX,
-            .BVFX,
-            .HVFX,
-            .AVFX,
-            .DESC,
-            => |known| {
+            // zig fmt: off
+            inline .ITEX, .PTEX, .BSND, .CSND, .HSND, .ASND, .CVFX, .BVFX, .HVFX, .AVFX,
+            .DESC => |known| {
+                // zig fmt: on
                 const tag = @tagName(known);
                 if (@field(new_MGEF, tag) != null) return error.SubrecordRedeclared;
 
@@ -84,11 +74,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (INDX) |indx| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_MGEF.deleted) {
+                    if (record_map.getPtr(indx)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, INDX, new_MGEF);
+        return record_map.put(allocator, indx, new_MGEF);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

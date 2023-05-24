@@ -46,10 +46,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_BOOK: BOOK = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         BKDT: bool = false,
     } = .{};
@@ -60,17 +59,15 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_BOOK.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
-            inline .MODL => |known| {
-                const tag = @tagName(known);
-                if (@field(meta, tag)) return error.SubrecordRedeclared;
-                @field(meta, tag) = true;
+            .MODL => {
+                if (meta.MODL) return error.SubrecordRedeclared;
+                meta.MODL = true;
 
-                @field(new_BOOK, tag) = subrecord.payload;
+                new_BOOK.MODL = subrecord.payload;
             },
             .BKDT => {
                 if (meta.BKDT) return error.SubrecordRedeclared;
@@ -88,11 +85,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_BOOK.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_BOOK);
+        return record_map.put(allocator, name, new_BOOK);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

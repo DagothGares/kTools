@@ -108,30 +108,29 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (meta.DATA) {
+        const as_u64 = @bitCast(u64, new_PGRD.DATA.grid);
+        // flag check is to verify true 0
+        const is_interior = as_u64 == 0 and new_PGRD.DATA.flags != 16384;
 
-    // flag check is to verify true 0
-    // TODO: maybe tie PGRD to CELL/LAND records instead?
-    const as_u64 = @bitCast(u64, new_PGRD.DATA.grid);
-    if (as_u64 == 0 and new_PGRD.DATA.flags != 16384) {
-        const NAME = new_PGRD.NAME.?;
+        if (is_interior) {
+            if (new_PGRD.NAME) |name| {
+                if (record_map.interior.get(name)) |pgrd| {
+                    if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
+                    if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
+                }
 
-        if (record_map.interior.get(NAME)) |pgrd| {
-            if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
-            if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
+                return record_map.interior.put(allocator, name, new_PGRD);
+            } else return error.MissingRequiredSubrecord;
+        } else {
+            if (record_map.exterior.get(as_u64)) |pgrd| {
+                if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
+                if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
+            }
+
+            return record_map.exterior.put(allocator, as_u64, new_PGRD);
         }
-
-        try record_map.interior.put(allocator, NAME, new_PGRD);
-    } else {
-        if (record_map.exterior.get(as_u64)) |pgrd| {
-            if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
-            if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
-        }
-
-        try record_map.exterior.put(allocator, as_u64, new_PGRD);
-    }
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writePgrc(

@@ -34,7 +34,9 @@ pub fn parse(
 ) !TES3 {
     var new_TES3: TES3 = undefined;
 
-    var hedr = false;
+    var meta: struct {
+        HEDR: bool = false,
+    } = .{};
 
     var masters = try std.ArrayListUnmanaged(u32).initCapacity(allocator, 1);
     defer masters.deinit(allocator);
@@ -45,7 +47,8 @@ pub fn parse(
     while (try iterator.next(logger, plugin_name, 0)) |subrecord| {
         switch (subrecord.tag) {
             .HEDR => {
-                hedr = true;
+                if (meta.HEDR) return error.SubrecordRedeclared;
+                meta.HEDR = true;
 
                 new_TES3.HEDR = util.getLittle(HEDR, subrecord.payload);
             },
@@ -72,7 +75,7 @@ pub fn parse(
         }
     }
 
-    if (!hedr) return error.MissingRequiredSubrecord;
+    if (!meta.HEDR) return error.MissingRequiredSubrecord;
 
     new_TES3.masters = try masters.toOwnedSlice(allocator);
 

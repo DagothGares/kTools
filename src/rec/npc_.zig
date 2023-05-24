@@ -62,10 +62,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_NPC: NPC_ = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         FLAG: bool = false,
         RNAM: bool = false,
         CNAM: bool = false,
@@ -90,8 +89,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_NPC.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -187,30 +185,38 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_NPC.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |crea| {
-        if (crea.NPCO) |npco| allocator.free(npco);
-        if (crea.NPCS) |npcs| allocator.free(npcs);
-        if (crea.DODT) |dodt| allocator.free(dodt);
-        if (crea.AI__) |ai__| allocator.free(ai__);
-    }
+        if (record_map.get(name)) |crea| {
+            if (crea.NPCO) |npco| allocator.free(npco);
+            if (crea.NPCS) |npcs| allocator.free(npcs);
+            if (crea.DODT) |dodt| allocator.free(dodt);
+            if (crea.AI__) |ai__| allocator.free(ai__);
+        }
 
-    if (new_NPCO.items.len > 0) new_NPC.NPCO = try new_NPCO.toOwnedSlice(allocator);
-    errdefer if (new_NPC.NPCO) |npco| allocator.free(npco);
+        if (new_NPCO.items.len > 0) new_NPC.NPCO = try new_NPCO.toOwnedSlice(allocator);
+        errdefer if (new_NPC.NPCO) |npco| allocator.free(npco);
 
-    if (new_NPCS.items.len > 0) new_NPC.NPCS = try new_NPCS.toOwnedSlice(allocator);
-    errdefer if (new_NPC.NPCS) |npcs| allocator.free(npcs);
+        if (new_NPCS.items.len > 0) new_NPC.NPCS = try new_NPCS.toOwnedSlice(allocator);
+        errdefer if (new_NPC.NPCS) |npcs| allocator.free(npcs);
 
-    if (new_DODT.items.len > 0) new_NPC.DODT = try new_DODT.toOwnedSlice(allocator);
-    errdefer if (new_NPC.DODT) |dodt| allocator.free(dodt);
+        if (new_DODT.items.len > 0) new_NPC.DODT = try new_DODT.toOwnedSlice(allocator);
+        errdefer if (new_NPC.DODT) |dodt| allocator.free(dodt);
 
-    if (new_AI.items.len > 0) new_NPC.AI__ = try new_AI.toOwnedSlice(allocator);
-    errdefer if (new_NPC.AI__) |ai__| allocator.free(ai__);
+        if (new_AI.items.len > 0) new_NPC.AI__ = try new_AI.toOwnedSlice(allocator);
+        errdefer if (new_NPC.AI__) |ai__| allocator.free(ai__);
 
-    try record_map.put(allocator, NAME, new_NPC);
+        return record_map.put(allocator, name, new_NPC);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeNpdtAi(
@@ -222,8 +228,9 @@ inline fn writeNpdtAi(
     const ignored = std.ComptimeStringMap(void, .{ .{"_garbage"}, .{"attributes"}, .{"skills"} });
 
     try json_stream.objectField("NPDT");
-    if (npc.FLAG & 0x10 != 0) try util.emitField(json_stream, npc.NPDT.short) else {
-        const long = &npc.NPDT.long;
+    const npdt = npc.NPDT;
+    if (npc.FLAG & 0x10 != 0) try util.emitField(json_stream, npdt.short) else {
+        const long = &npdt.long;
         try json_stream.beginObject();
         inline for (std.meta.fields(NPDT_52)) |field| {
             if (comptime ignored.has(field.name)) continue;
@@ -242,8 +249,8 @@ inline fn writeNpdtAi(
     }
 
     try json_stream.objectField("AI_");
-    try json_stream.beginArray();
     if (npc.AI__) |ai_list| {
+        try json_stream.beginArray();
         for (ai_list) |ai_union| {
             try json_stream.arrayElem();
             switch (ai_union) {
@@ -263,8 +270,8 @@ inline fn writeNpdtAi(
                 inline else => |ai| try util.emitField(json_stream, ai),
             }
         }
-    }
-    try json_stream.endArray();
+        try json_stream.endArray();
+    } else try json_stream.emitNull();
 }
 
 pub fn writeAll(

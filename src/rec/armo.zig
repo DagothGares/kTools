@@ -35,10 +35,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_ARMO: ARMO = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         FNAM: bool = false,
         AODT: bool = false,
@@ -53,8 +52,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_ARMO.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -104,16 +102,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_ARMO.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |armo| if (armo.INDX) |i| allocator.free(i);
+        if (record_map.get(name)) |armo| if (armo.INDX) |i| allocator.free(i);
 
-    if (new_INDX.items.len > 0) new_ARMO.INDX = try new_INDX.toOwnedSlice(allocator);
-    errdefer if (new_ARMO.INDX) |indx| allocator.free(indx);
+        if (new_INDX.items.len > 0) new_ARMO.INDX = try new_INDX.toOwnedSlice(allocator);
+        errdefer if (new_ARMO.INDX) |indx| allocator.free(indx);
 
-    try record_map.put(allocator, NAME, new_ARMO);
+        return record_map.put(allocator, name, new_ARMO);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeIndx(

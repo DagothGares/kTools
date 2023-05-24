@@ -30,7 +30,7 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SCPT: SCPT = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
         SCHD: bool = false,
@@ -61,11 +61,9 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
-
-    try record_map.put(allocator, NAME, new_SCPT);
+    if (NAME) |name| {
+        return record_map.put(allocator, name, new_SCPT);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeVrDt(

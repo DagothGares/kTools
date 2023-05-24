@@ -210,6 +210,8 @@ pub fn parse(
 
                 new_header.WHGT = util.getLittle(f32, subrecord.payload);
             },
+            // TODO: slice to required size after checking that the payload size is greater/equal
+            // to the required size
             .AMBI => {
                 if (new_header.AMBI != null) return error.SubrecordRedeclared;
 
@@ -344,46 +346,45 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (!meta.DATA) return error.MissingRequiredSubrecord;
 
     const is_interior = new_header.DATA.flags & 0x1 != 0;
     if (is_interior) {
-        const name = new_header.NAME.?;
-        try data.header.interior.put(allocator, name, new_header);
+        if (new_header.NAME) |name| {
+            try data.header.interior.put(allocator, name, new_header);
 
-        const mvrf_map = try data.mvrf.interior.getOrPut(allocator, name);
-        if (mvrf_map.found_existing) {
-            const iter = new_MVRF.iterator();
-            const existing_map = mvrf_map.value_ptr;
-            for (iter.keys[0..iter.len], iter.values[0..iter.len]) |key, value| {
-                try existing_map.put(allocator, key, value);
+            const mvrf_map = try data.mvrf.interior.getOrPut(allocator, name);
+            if (mvrf_map.found_existing) {
+                const iter = new_MVRF.iterator();
+                const existing_map = mvrf_map.value_ptr;
+                for (iter.keys[0..iter.len], iter.values[0..iter.len]) |key, value| {
+                    try existing_map.put(allocator, key, value);
+                }
+            } else {
+                mvrf_map.value_ptr.* = new_MVRF;
+                transferred_MVRF = true;
             }
-        } else {
-            mvrf_map.value_ptr.* = new_MVRF;
-            transferred_MVRF = true;
-        }
 
-        const frmr_map = try data.frmr.interior.getOrPut(allocator, name);
-        if (frmr_map.found_existing) {
-            const iter = new_FRMR.iterator();
-            const existing_map = frmr_map.value_ptr;
-            for (iter.keys[0..iter.len], iter.values[0..iter.len]) |key, value| {
-                const frmr = try existing_map.getOrPut(allocator, key);
-                if (frmr.found_existing) {
-                    if (frmr.value_ptr.*.DODT) |dodt| allocator.free(dodt);
-                    frmr.value_ptr.* = value;
-                } else frmr.value_ptr.* = value;
+            const frmr_map = try data.frmr.interior.getOrPut(allocator, name);
+            if (frmr_map.found_existing) {
+                const iter = new_FRMR.iterator();
+                const existing_map = frmr_map.value_ptr;
+                for (iter.keys[0..iter.len], iter.values[0..iter.len]) |key, value| {
+                    const frmr = try existing_map.getOrPut(allocator, key);
+                    if (frmr.found_existing) {
+                        if (frmr.value_ptr.*.DODT) |dodt| allocator.free(dodt);
+                        frmr.value_ptr.* = value;
+                    } else frmr.value_ptr.* = value;
+                }
+            } else {
+                frmr_map.value_ptr.* = new_FRMR;
+                transferred_FRMR = true;
             }
-        } else {
-            frmr_map.value_ptr.* = new_FRMR;
-            transferred_FRMR = true;
-        }
 
-        for (pending_deletions.keys()) |k| {
-            if (frmr_map.value_ptr.getPtr(k)) |frmr| frmr.flag |= 0x1;
-        }
+            for (pending_deletions.keys()) |k| {
+                if (frmr_map.value_ptr.getPtr(k)) |frmr| frmr.flag |= 0x1;
+            }
+        } else return error.MissingRequiredSubrecord;
     } else {
         const grid = @bitCast(u64, new_header.DATA.grid);
         try data.header.exterior.put(allocator, grid, new_header);

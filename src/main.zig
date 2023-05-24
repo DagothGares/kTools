@@ -118,7 +118,7 @@ fn getPluginList(allocator: std.mem.Allocator, path: []const u8) !plug_data {
     for (paths, 0..) |key, i| {
         const length = key.len;
 
-        std.mem.copy(u8, paths_raw[cur_pos .. cur_pos + length], key);
+        @memcpy(paths_raw[cur_pos .. cur_pos + length], key);
         paths[i] = paths_raw[cur_pos .. cur_pos + length];
 
         const short_name = blk: {
@@ -179,7 +179,7 @@ pub fn main() !void {
             else => null,
         },
         .Debug => std.heap.GeneralPurposeAllocator(.{
-            //.stack_trace_frames = 8,
+            .stack_trace_frames = 8,
             //.never_unmap = true,
             //.retain_metadata = true,
             //.verbose_log = true,

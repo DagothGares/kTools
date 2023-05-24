@@ -35,10 +35,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_WEAP: WEAP = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         MODL: bool = false,
         WPDT: bool = false,
     } = .{};
@@ -49,8 +48,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_WEAP.flag |= 0x1,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -76,11 +74,19 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_WEAP.flag & 0x1 != 0) {
+                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    try record_map.put(allocator, NAME, new_WEAP);
+        return record_map.put(allocator, name, new_WEAP);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeWpdt(
@@ -88,17 +94,21 @@ inline fn writeWpdt(
     _: []const u8,
     value: anytype,
 ) util.callback_err_type!void {
-    const weap = @as(*const WEAP, value);
+    const wpdt = @as(*const WEAP, value).WPDT;
 
     try json_stream.objectField("WPDT");
     try json_stream.beginObject();
     inline for (std.meta.fields(WPDT)) |field| {
+        if (comptime std.mem.eql(u8, field.name, "attacks")) continue;
+
         try json_stream.objectField(field.name);
-        if (comptime std.mem.eql(u8, field.name, "attacks")) {
-            try std.json.stringify(weap.WPDT.attacks, .{ .string = .Array }, json_stream.stream);
-            json_stream.state_index -= 1;
-        } else try util.emitField(json_stream, @field(weap.WPDT, field.name));
+        try util.emitField(json_stream, @field(wpdt, field.name));
     }
+
+    try json_stream.objectField("attacks");
+    try std.json.stringify(wpdt.attacks, .{ .string = .Array }, json_stream.stream);
+    json_stream.state_index -= 1;
+
     try json_stream.endObject();
 }
 

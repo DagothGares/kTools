@@ -33,10 +33,9 @@ pub fn parse(
     comptime lev: lev_type,
 ) !void {
     var new_LEV: LEV_ = .{ .lev_ = lev, .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         DATA: bool = false,
         NNAM: bool = false,
     } = .{};
@@ -50,8 +49,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_LEV.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -82,16 +80,24 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_LEV.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    if (record_map.get(NAME)) |lev_| if (lev_._NAM) |_nam| allocator.free(_nam);
+        if (record_map.get(name)) |lev_| if (lev_._NAM) |_nam| allocator.free(_nam);
 
-    if (new_NAM.items.len > 0) new_LEV._NAM = try new_NAM.toOwnedSlice(allocator);
-    errdefer if (new_LEV._NAM) |_nam| allocator.free(_nam);
+        if (new_NAM.items.len > 0) new_LEV._NAM = try new_NAM.toOwnedSlice(allocator);
+        errdefer if (new_LEV._NAM) |_nam| allocator.free(_nam);
 
-    try record_map.put(allocator, NAME, new_LEV);
+        return record_map.put(allocator, name, new_LEV);
+    } else return error.MissingRequiredSubrecord;
 }
 
 pub fn writeAll(

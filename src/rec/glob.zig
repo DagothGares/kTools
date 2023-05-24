@@ -19,10 +19,9 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_GLOB: GLOB = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: []const u8 = undefined;
+    var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        NAME: bool = false,
         FNAM: bool = false,
         FLTV: bool = false,
     } = .{};
@@ -33,8 +32,7 @@ pub fn parse(
         switch (subrecord.tag) {
             .DELE => new_GLOB.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
+                if (NAME != null) return error.SubrecordRedeclared;
 
                 NAME = subrecord.payload;
             },
@@ -54,28 +52,36 @@ pub fn parse(
         }
     }
 
-    inline for (std.meta.fields(@TypeOf(meta))) |field| {
-        if (!@field(meta, field.name)) return error.MissingRequiredSubrecord;
-    }
+    if (NAME) |name| {
+        inline for (std.meta.fields(@TypeOf(meta))) |field| {
+            if (!@field(meta, field.name)) {
+                if (new_GLOB.deleted) {
+                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
+                    return;
+                }
+                return error.MissingRequiredSubrecord;
+            }
+        }
 
-    switch (new_GLOB.FNAM) {
-        's' => {
-            const fltv = new_GLOB.FLTV.float;
-            new_GLOB.FLTV = .{
-                .short = if (fltv <= std.math.maxInt(i16)) @floatToInt(i16, fltv) else 0,
-            };
-        },
-        'l' => {
-            const fltv = new_GLOB.FLTV.float;
-            new_GLOB.FLTV = .{
-                .long = if (fltv <= std.math.maxInt(i32)) @floatToInt(i32, fltv) else 0,
-            };
-        },
-        'f' => {},
-        else => return error.Invalid_GLOB_FNAM,
-    }
+        switch (new_GLOB.FNAM) {
+            's' => {
+                const fltv = new_GLOB.FLTV.float;
+                new_GLOB.FLTV = .{
+                    .short = if (fltv <= std.math.maxInt(i16)) @floatToInt(i16, fltv) else 0,
+                };
+            },
+            'l' => {
+                const fltv = new_GLOB.FLTV.float;
+                new_GLOB.FLTV = .{
+                    .long = if (fltv <= std.math.maxInt(i32)) @floatToInt(i32, fltv) else 0,
+                };
+            },
+            'f' => {},
+            else => return error.Invalid_GLOB_FNAM,
+        }
 
-    try record_map.put(allocator, NAME, new_GLOB);
+        return record_map.put(allocator, name, new_GLOB);
+    } else return error.MissingRequiredSubrecord;
 }
 
 inline fn writeFields(
