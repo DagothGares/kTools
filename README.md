@@ -40,4 +40,4 @@ Note that while you are allowed to specify multiple hashes for each file, only t
 Then, run ``kTools.exe <load_order.json> <output_directory>``, where ``<load_order.json>`` is the json file you created, and ``<output_directory>`` is where you want the database to be generated (preferably, an empty directory).
 
 ## Reading the output
-todo
+see FORMAT.md
