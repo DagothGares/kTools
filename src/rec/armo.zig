@@ -16,8 +16,8 @@ const INDX = @import("shared.zig").INDX;
 
 flag: u2,
 MODL: []const u8 = undefined,
-FNAM: []const u8 = undefined,
 AODT: AODT = undefined,
+FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
 ENAM: ?[]const u8 = null, // passive ENAM
@@ -39,7 +39,6 @@ pub fn parse(
 
     var meta: struct {
         MODL: bool = false,
-        FNAM: bool = false,
         AODT: bool = false,
     } = .{};
 
@@ -56,12 +55,11 @@ pub fn parse(
 
                 NAME = subrecord.payload;
             },
-            inline .MODL, .FNAM => |known| {
-                const tag = @tagName(known);
-                if (@field(meta, tag)) return error.SubrecordRedeclared;
-                @field(meta, tag) = true;
+            .MODL => {
+                if (meta.MODL) return error.SubrecordRedeclared;
+                meta.MODL = true;
 
-                @field(new_ARMO, tag) = subrecord.payload;
+                new_ARMO.MODL = subrecord.payload;
             },
             .AODT => {
                 if (meta.AODT) return error.SubrecordRedeclared;
@@ -92,7 +90,7 @@ pub fn parse(
 
                 try new_INDX.append(allocator, indx);
             },
-            inline .SCRI, .ITEX, .ENAM => |known| {
+            inline .FNAM, .SCRI, .ITEX, .ENAM => |known| {
                 const tag = @tagName(known);
                 if (@field(new_ARMO, tag) != null) return error.SubrecordRedeclared;
 

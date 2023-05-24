@@ -37,10 +37,10 @@ flag: u2,
 FLAG: u32 = undefined,
 RNAM: []const u8 = undefined,
 CNAM: []const u8 = undefined,
-ANAM: []const u8 = undefined,
 BNAM: []const u8 = undefined,
-KNAM: []const u8 = undefined,
 NPDT: union { short: NPDT_12, long: NPDT_52 } = undefined,
+ANAM: ?[]const u8 = null,
+KNAM: ?[]const u8 = null,
 MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
@@ -68,9 +68,7 @@ pub fn parse(
         FLAG: bool = false,
         RNAM: bool = false,
         CNAM: bool = false,
-        ANAM: bool = false,
         BNAM: bool = false,
-        KNAM: bool = false,
         NPDT: bool = false,
     } = .{};
 
@@ -109,7 +107,7 @@ pub fn parse(
                     else => return error.NPDT_WrongSize,
                 }
             },
-            inline .RNAM, .CNAM, .ANAM, .BNAM, .KNAM => |known| {
+            inline .RNAM, .CNAM, .BNAM => |known| {
                 const tag = @tagName(known);
                 if (@field(meta, tag)) return error.SubrecordRedeclared;
                 @field(meta, tag) = true;
@@ -121,7 +119,7 @@ pub fn parse(
 
                 new_NPC.AIDT = util.getLittle(AIDT, subrecord.payload);
             },
-            inline .MODL, .FNAM, .SCRI => |known| {
+            inline .ANAM, .KNAM, .MODL, .FNAM, .SCRI => |known| {
                 const tag = @tagName(known);
                 if (@field(new_NPC, tag) != null) return error.SubrecordRedeclared;
 

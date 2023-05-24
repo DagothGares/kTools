@@ -21,7 +21,7 @@ fn printHelpMessage(allocator: std.mem.Allocator, writer: anytype) !void {
         "\t\t1250 - Central / Eastern European, Latin Script\n" ++
         "\t\t1251 - Cyrillic Script\n" ++
         "\t\t1252 - Latin (default)\n" ++
-        "\t   --log-level\tSets how verbose kTools logging should be. 0-4, 0 is least verbose.\n",
+        "\t   --log-level\tSets how verbose kTools logging should be. 0-3, 0 is least verbose.\n",
     // zig fmt: on
         .{args.next() orelse "kTools"},
     );
@@ -179,7 +179,7 @@ pub fn main() !void {
             else => {},
         },
         .Debug => std.heap.GeneralPurposeAllocator(.{
-            .stack_trace_frames = 8,
+            //.stack_trace_frames = 8,
             //.never_unmap = true,
             //.retain_metadata = true,
             //.verbose_log = true,

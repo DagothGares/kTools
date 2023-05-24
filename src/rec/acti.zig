@@ -5,7 +5,7 @@ const subs = util.subs;
 
 flag: u2,
 MODL: []const u8 = undefined,
-FNAM: []const u8 = undefined,
+FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
 
 const ACTI = @This();
@@ -24,7 +24,6 @@ pub fn parse(
 
     var meta: struct {
         MODL: bool = false,
-        FNAM: bool = false,
     } = .{};
 
     var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
@@ -39,17 +38,17 @@ pub fn parse(
 
                 NAME = subrecord.payload;
             },
-            inline .MODL, .FNAM => |known| {
+            .MODL => {
+                if (meta.MODL) return error.SubrecordRedeclared;
+                meta.MODL = true;
+
+                new_ACTI.MODL = subrecord.payload;
+            },
+            inline .FNAM, .SCRI => |known| {
                 const tag = @tagName(known);
-                if (@field(meta, tag)) return error.SubrecordRedeclared;
-                @field(meta, tag) = true;
+                if (@field(new_ACTI, tag) != null) return error.SubrecordRedeclared;
 
                 @field(new_ACTI, tag) = subrecord.payload;
-            },
-            .SCRI => {
-                if (new_ACTI.SCRI != null) return error.SubrecordRedeclared;
-
-                new_ACTI.SCRI = subrecord.payload;
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }

@@ -15,8 +15,8 @@ const RADT = extern struct {
 };
 
 deleted: bool,
-FNAM: []const u8 = undefined,
 RADT: RADT = undefined,
+FNAM: ?[]const u8 = null,
 DESC: ?[]const u8 = null,
 NPCS: ?[][]const u8 = null,
 
@@ -35,7 +35,6 @@ pub fn parse(
     var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        FNAM: bool = false,
         RADT: bool = false,
     } = .{};
 
@@ -52,22 +51,17 @@ pub fn parse(
 
                 NAME = subrecord.payload;
             },
-            .FNAM => {
-                if (meta.FNAM) return error.SubrecordRedeclared;
-                meta.FNAM = true;
-
-                new_RACE.FNAM = subrecord.payload;
-            },
             .RADT => {
                 if (meta.RADT) return error.SubrecordRedeclared;
                 meta.RADT = true;
 
                 new_RACE.RADT = util.getLittle(RADT, subrecord.payload);
             },
-            .DESC => {
-                if (new_RACE.DESC != null) return error.SubrecordRedeclared;
+            inline .FNAM, .DESC => |known| {
+                const tag = @tagName(known);
+                if (@field(new_RACE, tag) != null) return error.SubrecordRedeclared;
 
-                new_RACE.DESC = subrecord.payload;
+                @field(new_RACE, tag) = subrecord.payload;
             },
             .NPCS => try new_NPCS.append(allocator, subrecord.payload),
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),

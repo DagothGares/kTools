@@ -13,8 +13,8 @@ const LHDT = extern struct {
 };
 
 flag: u2,
-MODL: []const u8 = undefined,
 LHDT: LHDT = undefined,
+MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
 SNAM: ?[]const u8 = null,
@@ -35,7 +35,6 @@ pub fn parse(
     var NAME: ?[]const u8 = null;
 
     var meta: struct {
-        MODL: bool = false,
         LHDT: bool = false,
     } = .{};
 
@@ -49,19 +48,13 @@ pub fn parse(
 
                 NAME = subrecord.payload;
             },
-            .MODL => {
-                if (meta.MODL) return error.SubrecordRedeclared;
-                meta.MODL = true;
-
-                new_LIGH.MODL = subrecord.payload;
-            },
             .LHDT => {
                 if (meta.LHDT) return error.SubrecordRedeclared;
                 meta.LHDT = true;
 
                 new_LIGH.LHDT = util.getLittle(LHDT, subrecord.payload);
             },
-            inline .FNAM, .ITEX, .SNAM, .SCRI => |known| {
+            inline .MODL, .FNAM, .ITEX, .SNAM, .SCRI => |known| {
                 const tag = @tagName(known);
                 if (@field(new_LIGH, tag) != null) return error.SubrecordRedeclared;
 
