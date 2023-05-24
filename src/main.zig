@@ -176,7 +176,7 @@ pub fn main() !void {
     var gpa = switch (builtin.mode) {
         .ReleaseFast, .ReleaseSmall, .ReleaseSafe => switch (builtin.os.tag) {
             .windows => std.heap.HeapAllocator.init(),
-            else => null,
+            else => {},
         },
         .Debug => std.heap.GeneralPurposeAllocator(.{
             .stack_trace_frames = 8,

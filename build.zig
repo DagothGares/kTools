@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const build_info = b.addOptions();
-    build_info.addOption(?[]const u8, "semantic_version", null);
+    build_info.addOption(?[]const u8, "semantic_version", "0.1.0");
     // git hashes require more information than we have, so we just take a checksum
     // of the current directory via BLAKE3, instead.
     var blake3_checksum: [32]u8 = .{0} ** 32;
@@ -94,6 +94,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     exe.addOptions("build-info", build_info);
     exe.addModule("zig-args", args_module);
