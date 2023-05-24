@@ -58,7 +58,7 @@ pub fn parse(
                 if (meta.AADT) return error.SubrecordRedeclared;
                 meta.AADT = true;
 
-                new_APPA.AADT = util.getLittle(AADT, subrecord.payload);
+                new_APPA.AADT = try util.getLittle(AADT, subrecord.payload);
             },
             inline .SCRI, .ITEX => |known| {
                 const tag = @tagName(known);

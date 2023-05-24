@@ -79,21 +79,25 @@ pub fn parse(
             },
             .DATA => {
                 if (new_INFO.DATA != null) return error.SubrecordRedeclared;
+                if (subrecord.payload.len < 11) return error.TooSmall;
 
-                new_INFO.DATA = util.getLittle(DATA, subrecord.payload[4..11]);
+                new_INFO.DATA = util.getLittle(DATA, subrecord.payload[4..11]) catch unreachable;
             },
             .FNAM => {
                 if (new_INFO.FNAM != null) return error.SubrecordRedeclared;
 
                 // bethesda-ism; they used a value to represent null when they could have just...
                 // made it null, since it's a string (or not included it at all)
+                // zig fmt: off
                 if (!(subrecord.payload.len == 5 and
-                    std.ascii.eqlIgnoreCase(subrecord.payload, "FFFF")))
-                {
+                    std.ascii.eqlIgnoreCase(subrecord.payload, "FFFF"))) {
+                    // zig fmt: on
                     new_INFO.FNAM = subrecord.payload;
                 }
             },
             .SCVR => {
+                if (subrecord.payload.len < 5) return error.TooSmall;
+
                 var scvr: SCVR = .{
                     .index = .{subrecord.payload[0]},
                     .scvr_type = .{subrecord.payload[1]},
@@ -107,27 +111,27 @@ pub fn parse(
                         const should_be_FLTV = try iterator.next(logger, plugin_name, start) orelse
                             return error.MissingRequiredSubrecord;
                         if (should_be_FLTV.tag != .FLTV) return error.MissingRequiredSubrecord;
-                        scvr.__TV = .{ .FL = util.getLittle(f32, should_be_FLTV.payload) };
+                        scvr.__TV = .{ .FL = try util.getLittle(f32, should_be_FLTV.payload) };
                     },
                     'l' => {
                         const should_be_INTV = try iterator.next(logger, plugin_name, start) orelse
                             return error.MissingRequiredSubrecord;
                         if (should_be_INTV.tag != .INTV) return error.MissingRequiredSubrecord;
-                        scvr.__TV = .{ .IN = util.getLittle(u32, should_be_INTV.payload) };
+                        scvr.__TV = .{ .IN = try util.getLittle(u32, should_be_INTV.payload) };
                     },
                     's' => {
                         const should_be_INTV = try iterator.next(logger, plugin_name, start) orelse
                             return error.MissingRequiredSubrecord;
                         if (should_be_INTV.tag != .INTV) return error.MissingRequiredSubrecord;
                         scvr.__TV = .{
-                            .IN = @truncate(u16, util.getLittle(u32, should_be_INTV.payload)),
+                            .IN = @truncate(u16, try util.getLittle(u32, should_be_INTV.payload)),
                         };
                     },
                     else => {
                         const maybe_TV = try iterator.next(logger, plugin_name, start);
                         if (maybe_TV) |tv| switch (tv.tag) {
-                            .FLTV => scvr.__TV = .{ .FL = util.getLittle(f32, tv.payload) },
-                            .INTV => scvr.__TV = .{ .IN = util.getLittle(u32, tv.payload) },
+                            .FLTV => scvr.__TV = .{ .FL = try util.getLittle(f32, tv.payload) },
+                            .INTV => scvr.__TV = .{ .IN = try util.getLittle(u32, tv.payload) },
                             else => try iterator.stream.seekBy(
                                 -1 * @intCast(isize, tv.payload.len + 16),
                             ),

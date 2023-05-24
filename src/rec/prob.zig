@@ -51,7 +51,7 @@ pub fn parse(
                 if (meta.PBDT) return error.SubrecordRedeclared;
                 meta.PBDT = true;
 
-                new_PROB.PBDT = util.getLittle(PBDT, subrecord.payload);
+                new_PROB.PBDT = try util.getLittle(PBDT, subrecord.payload);
             },
             inline .FNAM, .ITEX, .SCRI => |known| {
                 const tag = @tagName(known);

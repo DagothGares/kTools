@@ -51,9 +51,9 @@ pub fn parse(
                 if (meta.ENDT) return error.SubrecordRedeclared;
                 meta.ENDT = true;
 
-                new_ENCH.ENDT = util.getLittle(ENDT, subrecord.payload);
+                new_ENCH.ENDT = try util.getLittle(ENDT, subrecord.payload);
             },
-            .ENAM => try new_ENAM.append(allocator, util.getLittle(ENAM, subrecord.payload)),
+            .ENAM => try new_ENAM.append(allocator, try util.getLittle(ENAM, subrecord.payload)),
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }
     }

@@ -57,7 +57,7 @@ pub fn parse(
                 if (meta.IRDT) return error.SubrecordRedeclared;
                 meta.IRDT = true;
 
-                new_INGR.IRDT = util.getLittle(IRDT, subrecord.payload);
+                new_INGR.IRDT = try util.getLittle(IRDT, subrecord.payload);
             },
             inline .FNAM, .SCRI, .ITEX => |known| {
                 const tag = @tagName(known);

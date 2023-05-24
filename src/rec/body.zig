@@ -68,7 +68,7 @@ pub fn parse(
                 if (meta.BYDT) return error.SubrecordRedeclared;
                 meta.BYDT = true;
 
-                new_BODY.BYDT = util.getLittle(BYDT, subrecord.payload);
+                new_BODY.BYDT = try util.getLittle(BYDT, subrecord.payload);
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }

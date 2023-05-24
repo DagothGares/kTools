@@ -62,7 +62,7 @@ pub fn parse(
                 if (meta.WPDT) return error.SubrecordRedeclared;
                 meta.WPDT = true;
 
-                new_WEAP.WPDT = util.getLittle(WPDT, subrecord.payload);
+                new_WEAP.WPDT = try util.getLittle(WPDT, subrecord.payload);
             },
             inline .FNAM, .ITEX, .ENAM, .SCRI => |known| {
                 const tag = @tagName(known);

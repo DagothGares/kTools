@@ -34,7 +34,7 @@ const impl = struct {
     pub const MISC = @import("rec/misc.zig");
     pub const NPC_ = @import("rec/npc_.zig");
     pub const PGRD = @import("rec/pgrd.zig");
-    // TODO: merge PROB with LOCK
+    //// TODO: merge PROB with LOCK
     pub const PROB = @import("rec/prob.zig");
     pub const RACE = @import("rec/race.zig");
     pub const REGN = @import("rec/regn.zig");

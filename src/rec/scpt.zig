@@ -45,11 +45,13 @@ pub fn parse(
                 if (meta.SCHD) return error.SubrecordRedeclared;
                 meta.SCHD = true;
 
+                if (subrecord.payload.len < 52) return error.TooSmall;
+
                 // For several reasons, it's a really good idea to do this instead of putting it
                 // inside the SCHD struct.
                 const end_index = std.mem.indexOf(u8, subrecord.payload[0..32], "\x00") orelse 32;
                 NAME = subrecord.payload[0..end_index];
-                new_SCPT.SCHD = util.getLittle(SCHD, subrecord.payload[32..]);
+                new_SCPT.SCHD = util.getLittle(SCHD, subrecord.payload[32..]) catch unreachable;
             },
             inline .SCVR, .SCDT, .SCTX => |known| {
                 const tag = @tagName(known);

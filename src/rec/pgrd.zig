@@ -73,14 +73,14 @@ pub fn parse(
                 if (meta.NAME) return error.SubrecordRedeclared;
                 meta.NAME = true;
 
-                // I think these can be empty when they're tied to unnamed exteriors...
+                // These can be empty when they're tied to unnamed exteriors
                 if (subrecord.payload[0] != 0) new_PGRD.NAME = subrecord.payload;
             },
             .DATA => {
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_PGRD.DATA = util.getLittle(DATA, subrecord.payload);
+                new_PGRD.DATA = try util.getLittle(DATA, subrecord.payload);
             },
             inline .PGRP, .PGRC => |known| {
                 const field_type = switch (known) {
@@ -100,7 +100,10 @@ pub fn parse(
 
                 var index: usize = 0;
                 for (@field(new_PGRD, tag).?) |*pgr_| {
-                    pgr_.* = util.getLittle(field_type, subrecord.payload[index .. index + size]);
+                    pgr_.* = util.getLittle(
+                        field_type,
+                        subrecord.payload[index .. index + size],
+                    ) catch unreachable;
                     index += size;
                 }
             },

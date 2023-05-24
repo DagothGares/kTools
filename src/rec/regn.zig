@@ -70,6 +70,7 @@ pub fn parse(
             .CNAM => {
                 if (meta.CNAM) return error.SubrecordRedeclared;
                 meta.CNAM = true;
+                if (subrecord.payload.len < 4) return error.TooSmall;
 
                 new_REGN.CNAM = subrecord.payload[0..4].*;
             },
@@ -77,15 +78,17 @@ pub fn parse(
                 if (meta.WEAT) return error.SubrecordRedeclared;
                 meta.WEAT = true;
 
-                std.debug.assert(subrecord.payload.len <= 10);
-                std.mem.copyForwards(u8, @ptrCast(*[10]u8, &new_REGN.WEAT), subrecord.payload);
+                const len: usize = if (subrecord.payload.len > 10) 10 else subrecord.payload.len;
+                if (len < 8) return error.TooSmall;
+
+                std.mem.copyForwards(u8, @ptrCast(*[10]u8, &new_REGN.WEAT), subrecord.payload[0..len]);
             },
             .BNAM => {
                 if (new_REGN.BNAM != null) return error.SubrecordRedeclared;
 
                 new_REGN.BNAM = subrecord.payload;
             },
-            .SNAM => try new_SNAM.append(allocator, util.getLittle(SNAM, subrecord.payload)),
+            .SNAM => try new_SNAM.append(allocator, try util.getLittle(SNAM, subrecord.payload)),
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }
     }

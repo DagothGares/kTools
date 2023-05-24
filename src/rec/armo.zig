@@ -65,10 +65,9 @@ pub fn parse(
                 if (meta.AODT) return error.SubrecordRedeclared;
                 meta.AODT = true;
 
-                new_ARMO.AODT = util.getLittle(AODT, subrecord.payload);
+                new_ARMO.AODT = try util.getLittle(AODT, subrecord.payload);
             },
             .INDX => {
-                std.debug.assert(subrecord.payload.len == 1);
                 var indx: INDX = .{ .index = subrecord.payload[0] };
 
                 var last_pos: u64 = try iterator.stream.getPos();

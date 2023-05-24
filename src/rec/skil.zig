@@ -39,13 +39,13 @@ pub fn parse(
             .INDX => {
                 if (INDX != null) return error.SubrecordRedeclared;
 
-                INDX = util.getLittle(u32, subrecord.payload);
+                INDX = try util.getLittle(u32, subrecord.payload);
             },
             .SKDT => {
                 if (meta.SKDT) return error.SubrecordRedeclared;
                 meta.SKDT = true;
 
-                new_SKIL.SKDT = util.getLittle(SKDT, subrecord.payload);
+                new_SKIL.SKDT = try util.getLittle(SKDT, subrecord.payload);
             },
             .DESC => {
                 if (new_SKIL.DESC != null) return error.SubrecordRedeclared;

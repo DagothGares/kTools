@@ -51,7 +51,7 @@ pub fn parse(
                 if (meta.LKDT) return error.SubrecordRedeclared;
                 meta.LKDT = true;
 
-                new_LOCK.LKDT = util.getLittle(LKDT, subrecord.payload);
+                new_LOCK.LKDT = try util.getLittle(LKDT, subrecord.payload);
             },
             inline .FNAM, .ITEX, .SCRI => |known| {
                 const tag = @tagName(known);

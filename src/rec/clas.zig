@@ -66,7 +66,7 @@ pub fn parse(
                 if (meta.CLDT) return error.SubrecordRedeclared;
                 meta.CLDT = true;
 
-                new_CLAS.CLDT = util.getLittle(CLDT, subrecord.payload);
+                new_CLAS.CLDT = try util.getLittle(CLDT, subrecord.payload);
             },
             .DESC => {
                 if (new_CLAS.DESC != null) return error.SubrecordRedeclared;

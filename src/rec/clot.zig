@@ -65,7 +65,7 @@ pub fn parse(
                 if (meta.CTDT) return error.SubrecordRedeclared;
                 meta.CTDT = true;
 
-                new_CLOT.CTDT = util.getLittle(CTDT, subrecord.payload);
+                new_CLOT.CTDT = try util.getLittle(CTDT, subrecord.payload);
             },
             .INDX => {
                 std.debug.assert(subrecord.payload.len == 1);

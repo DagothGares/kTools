@@ -53,13 +53,13 @@ pub fn parse(
             .INDX => {
                 if (INDX != null) return error.SubrecordRedeclared;
 
-                INDX = util.getLittle(u32, subrecord.payload);
+                INDX = try util.getLittle(u32, subrecord.payload);
             },
             .MEDT => {
                 if (meta.MEDT) return error.SubrecordRedeclared;
                 meta.MEDT = true;
 
-                new_MGEF.MEDT = util.getLittle(MEDT, subrecord.payload);
+                new_MGEF.MEDT = try util.getLittle(MEDT, subrecord.payload);
             },
             // zig fmt: off
             inline .ITEX, .PTEX, .BSND, .CSND, .HSND, .ASND, .CVFX, .BVFX, .HVFX, .AVFX,

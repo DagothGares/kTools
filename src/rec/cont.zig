@@ -58,12 +58,16 @@ pub fn parse(
                 @field(meta, tag) = true;
 
                 const field_type = if (known == .CNDT) f32 else u32;
-                @field(new_CONT, tag) = util.getLittle(field_type, subrecord.payload);
+                @field(new_CONT, tag) = try util.getLittle(field_type, subrecord.payload);
             },
-            .NPCO => try new_NPCO.append(allocator, .{
-                .count = util.getLittle(i32, subrecord.payload[0..4]),
-                .name = subrecord.payload[4..],
-            }),
+            .NPCO => {
+                if (subrecord.payload.len < 36) return error.TooSmall;
+
+                try new_NPCO.append(allocator, .{
+                    .count = util.getLittle(i32, subrecord.payload[0..4]) catch unreachable,
+                    .name = subrecord.payload[4..],
+                });
+            },
             inline .FNAM, .SCRI => |known| {
                 const tag = @tagName(known);
                 if (@field(new_CONT, tag) != null) return error.SubrecordRedeclared;

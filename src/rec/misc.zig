@@ -54,7 +54,7 @@ pub fn parse(
                 if (meta.MCDT) return error.SubrecordRedeclared;
                 meta.MCDT = true;
 
-                new_MISC.MCDT = util.getLittle(MCDT, subrecord.payload[0..@sizeOf(MCDT)]);
+                new_MISC.MCDT = try util.getLittle(MCDT, subrecord.payload);
             },
             inline .FNAM, .SCRI, .ITEX => |known| {
                 const tag = @tagName(known);

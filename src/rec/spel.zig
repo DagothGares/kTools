@@ -51,14 +51,14 @@ pub fn parse(
                 if (meta.SPDT) return error.SubrecordRedeclared;
                 meta.SPDT = true;
 
-                new_SPEL.SPDT = util.getLittle(SPDT, subrecord.payload);
+                new_SPEL.SPDT = try util.getLittle(SPDT, subrecord.payload);
             },
             .FNAM => {
                 if (new_SPEL.FNAM != null) return error.SubrecordRedeclared;
 
                 new_SPEL.FNAM = subrecord.payload;
             },
-            .ENAM => try new_ENAM.append(allocator, util.getLittle(ENAM, subrecord.payload)),
+            .ENAM => try new_ENAM.append(allocator, try util.getLittle(ENAM, subrecord.payload)),
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }
     }

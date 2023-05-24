@@ -192,7 +192,7 @@ pub fn parse(
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_header.DATA = util.getLittle(DATA, subrecord.payload);
+                new_header.DATA = try util.getLittle(DATA, subrecord.payload);
             },
             .RGNN => {
                 if (new_header.RGNN != null) return error.SubrecordRedeclared;
@@ -201,24 +201,24 @@ pub fn parse(
             },
             .NAM5 => {
                 if (new_header.NAM5 != null) return error.SubrecordRedeclared;
-                std.debug.assert(subrecord.payload.len == 4);
+                if (subrecord.payload.len < 4) return error.TooSmall;
 
                 new_header.NAM5 = subrecord.payload[0..4].*;
             },
             .WHGT => {
                 if (new_header.WHGT != null) return error.SubrecordRedeclared;
 
-                new_header.WHGT = util.getLittle(f32, subrecord.payload);
+                new_header.WHGT = try util.getLittle(f32, subrecord.payload);
             },
             // TODO: slice to required size after checking that the payload size is greater/equal
             // to the required size
             .AMBI => {
                 if (new_header.AMBI != null) return error.SubrecordRedeclared;
 
-                new_header.AMBI = util.getLittle(AMBI, subrecord.payload);
+                new_header.AMBI = try util.getLittle(AMBI, subrecord.payload);
             },
             .MVRF => {
-                var ref_index: u64 = util.getLittle(u32, subrecord.payload);
+                var ref_index: u64 = try util.getLittle(u32, subrecord.payload);
                 ref_index |= @as(u64, masters[subrecord.payload[3]]) << 32;
 
                 var has_destination = false;
@@ -242,7 +242,7 @@ pub fn parse(
                             try new_MVRF.put(
                                 allocator,
                                 ref_index,
-                                .{ .CNDT = util.getLittle([2]i32, next_sub.payload) },
+                                .{ .CNDT = try util.getLittle([2]i32, next_sub.payload) },
                             );
                         },
                         else => break,
@@ -255,7 +255,7 @@ pub fn parse(
                 if (deleted) try pending_deletions.put(allocator, ref_index, {});
             },
             .FRMR => {
-                var ref_index: u64 = @truncate(u24, util.getLittle(u32, subrecord.payload));
+                var ref_index: u64 = @truncate(u24, try util.getLittle(u32, subrecord.payload));
                 ref_index |= @as(u64, masters[subrecord.payload[3]]) << 32;
 
                 var frmr: FRMR = .{ .flag = @as(u2, @boolToInt(persists)) << 1 };
@@ -290,12 +290,12 @@ pub fn parse(
 
                             frmr.CNAM = .{
                                 .faction_id = next_sub.payload,
-                                .rank = util.getLittle(u32, should_be_INDX.payload),
+                                .rank = try util.getLittle(u32, should_be_INDX.payload),
                             };
                         },
                         .DODT => {
                             var dodt: DODT = .{
-                                .destination = util.getLittle([6]f32, next_sub.payload),
+                                .destination = try util.getLittle([6]f32, next_sub.payload),
                             };
 
                             const pos = try iterator.stream.getPos();
@@ -309,19 +309,18 @@ pub fn parse(
                         .DATA => {
                             if (frmr.DATA != null) return error.SubrecordRedeclared;
 
-                            frmr.DATA = util.getLittle([6]f32, next_sub.payload);
+                            frmr.DATA = try util.getLittle([6]f32, next_sub.payload);
                         },
-                        inline .XSCL, .XCHG => |known| {
+                        inline .XSCL, .XCHG, .INTV, .NAM9, .FLTV => |known| {
                             const tag = @tagName(known);
                             if (@field(frmr, tag) != null) return error.SubrecordRedeclared;
+                            const field_type = switch (known) {
+                                .XSCL, .XCHG => f32,
+                                .INTV, .NAM9, .FLTV => u32,
+                                else => unreachable,
+                            };
 
-                            @field(frmr, tag) = util.getLittle(f32, next_sub.payload);
-                        },
-                        inline .INTV, .NAM9, .FLTV => |known| {
-                            const tag = @tagName(known);
-                            if (@field(frmr, tag) != null) return error.SubrecordRedeclared;
-
-                            @field(frmr, tag) = util.getLittle(u32, next_sub.payload);
+                            @field(frmr, tag) = try util.getLittle(field_type, next_sub.payload);
                         },
                         inline .ANAM, .BNAM, .XSOL, .KNAM, .TNAM => |known| {
                             const tag = @tagName(known);

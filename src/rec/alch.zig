@@ -57,7 +57,7 @@ pub fn parse(
                 if (meta.ALDT) return error.SubrecordRedeclared;
                 meta.ALDT = true;
 
-                new_ALCH.ALDT = util.getLittle(ALDT, subrecord.payload);
+                new_ALCH.ALDT = try util.getLittle(ALDT, subrecord.payload);
             },
             inline .MODL, .TEXT, .SCRI, .FNAM => |known| {
                 const tag = @tagName(known);
@@ -65,7 +65,7 @@ pub fn parse(
 
                 @field(new_ALCH, tag) = subrecord.payload;
             },
-            .ENAM => try new_ENAM.append(allocator, util.getLittle(ENAM, subrecord.payload)),
+            .ENAM => try new_ENAM.append(allocator, try util.getLittle(ENAM, subrecord.payload)),
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }
     }

@@ -40,7 +40,7 @@ pub fn parse(
                 if (meta.INTV) return error.SubrecordRedeclared;
                 meta.INTV = true;
 
-                new_LTEX.INTV = util.getLittle(u32, subrecord.payload);
+                new_LTEX.INTV = try util.getLittle(u32, subrecord.payload);
             },
             .DATA => {
                 if (meta.DATA) return error.SubrecordRedeclared;

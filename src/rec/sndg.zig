@@ -40,7 +40,7 @@ pub fn parse(
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_SNDG.DATA = util.getLittle(u32, subrecord.payload);
+                new_SNDG.DATA = try util.getLittle(u32, subrecord.payload);
             },
             inline .CNAM, .SNAM => |known| {
                 const tag = @tagName(known);

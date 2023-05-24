@@ -95,16 +95,20 @@ pub fn parse(
                 if (meta.FLAG) return error.SubrecordRedeclared;
                 meta.FLAG = true;
 
-                new_NPC.FLAG = util.getLittle(u32, subrecord.payload);
+                new_NPC.FLAG = try util.getLittle(u32, subrecord.payload);
             },
             .NPDT => {
                 if (meta.NPDT) return error.SubrecordRedeclared;
                 meta.NPDT = true;
 
                 switch (subrecord.payload.len) {
-                    12 => new_NPC.NPDT = .{ .short = util.getLittle(NPDT_12, subrecord.payload) },
-                    52 => new_NPC.NPDT = .{ .long = util.getLittle(NPDT_52, subrecord.payload) },
-                    else => return error.NPDT_WrongSize,
+                    1...11 => return error.TooSmall,
+                    12...51 => new_NPC.NPDT = .{
+                        .short = util.getLittle(NPDT_12, subrecord.payload) catch unreachable,
+                    },
+                    else => new_NPC.NPDT = .{
+                        .long = util.getLittle(NPDT_52, subrecord.payload) catch unreachable,
+                    },
                 }
             },
             inline .RNAM, .CNAM, .BNAM => |known| {
@@ -117,7 +121,7 @@ pub fn parse(
             .AIDT => {
                 if (new_NPC.AIDT != null) return error.SubrecordRedeclared;
 
-                new_NPC.AIDT = util.getLittle(AIDT, subrecord.payload);
+                new_NPC.AIDT = try util.getLittle(AIDT, subrecord.payload);
             },
             inline .ANAM, .KNAM, .MODL, .FNAM, .SCRI => |known| {
                 const tag = @tagName(known);
@@ -125,13 +129,17 @@ pub fn parse(
 
                 @field(new_NPC, tag) = subrecord.payload;
             },
-            .NPCO => try new_NPCO.append(allocator, .{
-                .count = util.getLittle(i32, subrecord.payload[0..4]),
-                .name = subrecord.payload[4..],
-            }),
+            .NPCO => {
+                if (subrecord.payload.len < 36) return error.TooSmall;
+
+                try new_NPCO.append(allocator, .{
+                    .count = util.getLittle(i32, subrecord.payload) catch unreachable,
+                    .name = subrecord.payload[4..],
+                });
+            },
             .NPCS => try new_NPCS.append(allocator, subrecord.payload),
             .DODT => {
-                var dodt: DODT = .{ .destination = util.getLittle([6]f32, subrecord.payload) };
+                var dodt: DODT = .{ .destination = try util.getLittle([6]f32, subrecord.payload) };
 
                 const pos = try iterator.stream.getPos();
                 const maybe_dnam = try iterator.next(logger, plugin_name, start);
@@ -155,9 +163,9 @@ pub fn parse(
                     else => unreachable,
                 };
 
-                try new_AI.append(allocator, @unionInit(AI__, tag, util.getLittle(
+                try new_AI.append(allocator, @unionInit(AI__, tag, try util.getLittle(
                     package_type,
-                    subrecord.payload[0..@sizeOf(package_type)],
+                    subrecord.payload,
                 )));
             },
             inline .AI_E, .AI_F => |known| {
@@ -166,9 +174,9 @@ pub fn parse(
                     .AI_F => "F",
                     else => unreachable,
                 };
-                var ai_ef = @unionInit(AI__, tag, .{ .core = util.getLittle(
+                var ai_ef = @unionInit(AI__, tag, .{ .core = try util.getLittle(
                     AI__.ef_package,
-                    subrecord.payload[0..@sizeOf(AI__.ef_package)],
+                    subrecord.payload,
                 ) });
 
                 const pos = try iterator.stream.getPos();

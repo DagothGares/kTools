@@ -46,7 +46,7 @@ pub fn parse(
                 if (meta.FLTV) return error.SubrecordRedeclared;
                 meta.FLTV = true;
 
-                new_GLOB.FLTV = .{ .float = util.getLittle(f32, subrecord.payload) };
+                new_GLOB.FLTV = .{ .float = try util.getLittle(f32, subrecord.payload) };
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }

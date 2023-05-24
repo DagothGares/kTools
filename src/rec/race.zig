@@ -55,7 +55,7 @@ pub fn parse(
                 if (meta.RADT) return error.SubrecordRedeclared;
                 meta.RADT = true;
 
-                new_RACE.RADT = util.getLittle(RADT, subrecord.payload);
+                new_RACE.RADT = try util.getLittle(RADT, subrecord.payload);
             },
             inline .FNAM, .DESC => |known| {
                 const tag = @tagName(known);

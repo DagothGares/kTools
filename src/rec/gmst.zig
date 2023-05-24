@@ -45,8 +45,8 @@ pub fn parse(
                     else => unreachable,
                 };
                 const content = switch (known) {
-                    .FLTV => util.getLittle(f32, subrecord.payload),
-                    .INTV => util.getLittle(i32, subrecord.payload),
+                    .FLTV => try util.getLittle(f32, subrecord.payload),
+                    .INTV => try util.getLittle(i32, subrecord.payload),
                     .STRV => subrecord.payload,
                     else => unreachable,
                 };

@@ -95,7 +95,7 @@ pub fn parse(
                     .AIDT => AIDT,
                     else => unreachable,
                 };
-                @field(new_CREA, tag) = util.getLittle(field_type, subrecord.payload);
+                @field(new_CREA, tag) = try util.getLittle(field_type, subrecord.payload);
             },
             inline .CNAM, .FNAM, .SCRI => |known| {
                 const tag = @tagName(known);
@@ -106,15 +106,19 @@ pub fn parse(
             .XSCL => {
                 if (new_CREA.XSCL != null) return error.SubrecordRedeclared;
 
-                new_CREA.XSCL = util.getLittle(f32, subrecord.payload);
+                new_CREA.XSCL = try util.getLittle(f32, subrecord.payload);
             },
-            .NPCO => try new_NPCO.append(allocator, .{
-                .count = util.getLittle(i32, subrecord.payload[0..4]),
-                .name = subrecord.payload[4..],
-            }),
+            .NPCO => {
+                if (subrecord.payload.len < 36) return error.TooSmall;
+
+                try new_NPCO.append(allocator, .{
+                    .count = util.getLittle(i32, subrecord.payload[0..4]) catch unreachable,
+                    .name = subrecord.payload[4..],
+                });
+            },
             .NPCS => try new_NPCS.append(allocator, subrecord.payload),
             .DODT => {
-                var dodt: DODT = .{ .destination = util.getLittle([6]f32, subrecord.payload) };
+                var dodt: DODT = .{ .destination = try util.getLittle([6]f32, subrecord.payload) };
 
                 const pos = try iterator.stream.getPos();
                 const maybe_dnam = try iterator.next(logger, plugin_name, start);
@@ -138,9 +142,9 @@ pub fn parse(
                     else => unreachable,
                 };
 
-                try new_AI.append(allocator, @unionInit(AI__, tag, util.getLittle(
+                try new_AI.append(allocator, @unionInit(AI__, tag, try util.getLittle(
                     package_type,
-                    subrecord.payload[0..@sizeOf(package_type)],
+                    subrecord.payload,
                 )));
             },
             inline .AI_E, .AI_F => |known| {
@@ -149,9 +153,9 @@ pub fn parse(
                     .AI_F => "F",
                     else => unreachable,
                 };
-                var ai_ef = @unionInit(AI__, tag, .{ .core = util.getLittle(
+                var ai_ef = @unionInit(AI__, tag, .{ .core = try util.getLittle(
                     AI__.ef_package,
-                    subrecord.payload[0..@sizeOf(AI__.ef_package)],
+                    subrecord.payload,
                 ) });
 
                 const pos = try iterator.stream.getPos();

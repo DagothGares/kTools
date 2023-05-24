@@ -70,7 +70,7 @@ pub fn parse(
                 if (meta.FADT) return error.SubrecordRedeclared;
                 meta.FADT = true;
 
-                new_FACT.FADT = util.getLittle(FADT, subrecord.payload);
+                new_FACT.FADT = try util.getLittle(FADT, subrecord.payload);
             },
             .RNAM => try new_RNAM.append(allocator, subrecord.payload),
             .ANAM => {
@@ -82,7 +82,7 @@ pub fn parse(
                     try new_ANAM.put(
                         allocator,
                         subrecord.payload,
-                        util.getLittle(i32, should_be_INTV.payload),
+                        try util.getLittle(i32, should_be_INTV.payload),
                     );
                 }
             },

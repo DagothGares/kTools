@@ -46,17 +46,18 @@ pub fn parse(
             .INTV => {
                 if (INTV != null) return error.SubrecordRedeclared;
 
-                INTV = @bitCast(u64, util.getLittle([2]i32, subrecord.payload));
+                INTV = @bitCast(u64, try util.getLittle([2]i32, subrecord.payload));
             },
             .DATA => {
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_LAND.DATA = util.getLittle(u32, subrecord.payload);
+                new_LAND.DATA = try util.getLittle(u32, subrecord.payload);
             },
             .VHGT => {
                 // vhgt is special because we strip 3 bytes of junk at the end
                 if (new_LAND.VHGT != null) return error.SubrecordRedeclared;
+                if (subrecord.payload.len < 4229) return error.TooSmall;
 
                 new_LAND.VHGT = @ptrCast(*align(1) const VHGT, subrecord.payload[0..4229]);
             },
@@ -71,6 +72,8 @@ pub fn parse(
                     .VTEX => [16][16]u16,
                     else => unreachable,
                 };
+                if (subrecord.payload.len < @sizeOf(field_type)) return error.TooSmall;
+
                 @field(new_LAND, tag) = @ptrCast(*align(1) const field_type, subrecord.payload);
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),

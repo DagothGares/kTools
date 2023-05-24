@@ -50,7 +50,7 @@ pub fn parse(
                 if (meta.HEDR) return error.SubrecordRedeclared;
                 meta.HEDR = true;
 
-                new_TES3.HEDR = util.getLittle(HEDR, subrecord.payload);
+                new_TES3.HEDR = try util.getLittle(HEDR, subrecord.payload);
             },
             .MAST => {
                 const should_be_DATA = try iterator.next(logger, plugin_name, 0);

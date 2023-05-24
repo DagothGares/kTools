@@ -373,14 +373,14 @@ pub fn cast(comptime T: type, x: anytype) !T {
     return std.math.cast(T, x) orelse return error.CastTruncatedBits;
 }
 
-fn castNative(comptime T: type, bytes: []const u8) T {
-    std.debug.assert(bytes.len == (@divExact(@bitSizeOf(T), 8)));
-    return @ptrCast(*align(1) const T, bytes).*;
+fn castNative(comptime T: type, bytes: []const u8) !T {
+    if (bytes.len < @sizeOf(T)) return error.TooSmall;
+    return @ptrCast(*align(1) const T, bytes[0..@sizeOf(T)]).*;
 }
 
 /// Stub implementation
-pub fn castForeign(comptime T: type, bytes: []const u8) T {
-    const real = castNative(T, bytes);
+pub fn castForeign(comptime T: type, bytes: []const u8) !T {
+    const real = try castNative(T, bytes);
     var copy: T = undefined;
     switch (@typeInfo(T)) {
         .Int => copy = @byteSwap(real),

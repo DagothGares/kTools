@@ -57,7 +57,7 @@ pub fn parse(
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_LEV.DATA = util.getLittle(u32, subrecord.payload);
+                new_LEV.DATA = try util.getLittle(u32, subrecord.payload);
             },
             .NNAM => {
                 if (meta.NNAM) return error.SubrecordRedeclared;
@@ -71,7 +71,7 @@ pub fn parse(
                 const should_be_INTV = try iterator.next(logger, plugin_name, start) orelse
                     return error.MissingRequiredSubrecord;
                 if (should_be_INTV.tag != .INTV) return error.MissingRequiredSubrecord;
-                _nam.pc_level = util.getLittle(u16, should_be_INTV.payload);
+                _nam.pc_level = try util.getLittle(u16, should_be_INTV.payload);
 
                 try new_NAM.append(allocator, _nam);
             },

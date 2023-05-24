@@ -52,7 +52,7 @@ pub fn parse(
                 if (meta.LHDT) return error.SubrecordRedeclared;
                 meta.LHDT = true;
 
-                new_LIGH.LHDT = util.getLittle(LHDT, subrecord.payload);
+                new_LIGH.LHDT = try util.getLittle(LHDT, subrecord.payload);
             },
             inline .MODL, .FNAM, .ITEX, .SNAM, .SCRI => |known| {
                 const tag = @tagName(known);

@@ -73,7 +73,7 @@ pub fn parse(
                 if (meta.BKDT) return error.SubrecordRedeclared;
                 meta.BKDT = true;
 
-                new_BOOK.BKDT = util.getLittle(BKDT, subrecord.payload);
+                new_BOOK.BKDT = try util.getLittle(BKDT, subrecord.payload);
             },
             inline .FNAM, .SCRI, .ITEX, .TEXT, .ENAM => |known| {
                 const tag = @tagName(known);

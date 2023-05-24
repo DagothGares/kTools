@@ -52,7 +52,7 @@ pub fn parse(
                 if (meta.DATA) return error.SubrecordRedeclared;
                 meta.DATA = true;
 
-                new_SOUN.DATA = util.getLittle(DATA, subrecord.payload);
+                new_SOUN.DATA = try util.getLittle(DATA, subrecord.payload);
             },
             else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
         }

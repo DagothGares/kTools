@@ -51,7 +51,7 @@ pub fn parse(
                 if (meta.RIDT) return error.SubrecordRedeclared;
                 meta.RIDT = true;
 
-                new_REPA.RIDT = util.getLittle(RIDT, subrecord.payload);
+                new_REPA.RIDT = try util.getLittle(RIDT, subrecord.payload);
             },
             inline .FNAM, .ITEX, .SCRI => |known| {
                 const tag = @tagName(known);
