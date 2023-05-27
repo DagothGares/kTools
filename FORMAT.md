@@ -141,7 +141,7 @@ where each key is the name of another faction, and the value is the INTV subreco
 ```
 Note that the definition of the union type is ``AI__``, which can be found in ``src/rec/shared.zig``.
 
-``INFO`` records are actually stored as part of the ``DIAL`` record they are attached to, as a hashmap. For example, this is the ``DIAL`` record ``[a1_dreams]``:
+``INFO`` records are actually stored as part of the ``DIAL`` record they are attached to, as a hashmap. For example, this is the ``DIAL`` record ``a1_dreams``:
 ```json
 {
   "deleted": false,
