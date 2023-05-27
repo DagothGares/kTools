@@ -47,7 +47,7 @@ The last major deviation across all record types that I'll mention is that all f
 As far as the field names for structs in individual records (and whether or not subrecords are guaranteed to exist for a given record), you can check ``src/rec/`` and see the structure for records yourself. For example, ``ALCH`` has the following fields:
 ```zig
 flag: u2, // This turns into the 'deleted' and 'persistent' fields in the output. If a record can only be deleted, this will be 'deleted: bool', instead.
-ALDT: ALDT = .{}, // This is a struct. The ``.{}`` indicates that it is initialized in its' default state until it is overwritten; for most structs, this means that all fields are set to ``0``.
+ALDT: ALDT = .{}, // This is a struct. The '.{}' indicates that it is initialized in its' default state until it is overwritten; for most structs, this means that all fields are set to '0'.
 MODL: ?[]const u8 = null, // This is an optional string. Required strings (such as INFO:PNAM) instead look like 'PNAM: []const u8 = ""'.
 TEXT: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
