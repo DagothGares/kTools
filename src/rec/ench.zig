@@ -6,14 +6,14 @@ const subs = util.subs;
 const ENAM = @import("shared.zig").ENAM;
 
 const ENDT = extern struct {
-    enchantment_type: u32 align(1),
-    cost: u32 align(1),
-    charge: u32 align(1),
-    flags: u32 align(1),
+    enchantment_type: u32 align(1) = 0,
+    cost: u32 align(1) = 0,
+    charge: u32 align(1) = 0,
+    flags: u32 align(1) = 0,
 };
 
 deleted: bool,
-ENDT: ENDT = undefined,
+ENDT: ENDT = .{},
 ENAM: ?[]ENAM = null,
 
 const ENCH = @This();
@@ -28,54 +28,39 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_ENCH: ENCH = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
-
-    var meta: struct {
-        ENDT: bool = false,
-    } = .{};
+    var NAME: []const u8 = "";
 
     var new_ENAM: std.ArrayListUnmanaged(ENAM) = .{};
     defer new_ENAM.deinit(allocator);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_ENCH.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .ENDT => {
-                if (meta.ENDT) return error.SubrecordRedeclared;
-                meta.ENDT = true;
-
-                new_ENCH.ENDT = try util.getLittle(ENDT, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .ENDT => new_ENCH.ENDT = try util.getLittle(ENDT, subrecord.payload),
             .ENAM => try new_ENAM.append(allocator, try util.getLittle(ENAM, subrecord.payload)),
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_ENCH.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    if (record_map.get(NAME)) |ench| if (ench.ENAM) |enam| allocator.free(enam);
 
-        if (record_map.get(name)) |ench| if (ench.ENAM) |enam| allocator.free(enam);
+    if (new_ENAM.items.len > 0) new_ENCH.ENAM = try new_ENAM.toOwnedSlice(allocator);
+    errdefer if (new_ENCH.ENAM) |enam| allocator.free(enam);
 
-        if (new_ENAM.items.len > 0) new_ENCH.ENAM = try new_ENAM.toOwnedSlice(allocator);
-        errdefer if (new_ENCH.ENAM) |enam| allocator.free(enam);
-
-        return record_map.put(allocator, name, new_ENCH);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_ENCH);
 }
 
 pub fn writeAll(

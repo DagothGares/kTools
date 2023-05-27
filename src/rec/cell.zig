@@ -44,15 +44,15 @@ const subs = util.subs;
 // 2-dimensional coordinates, depending on if they're interiors or not.
 
 const DATA = extern struct {
-    flags: u32 align(1),
-    grid: [2]i32 align(1),
+    flags: u32 align(1) = 0,
+    grid: [2]i32 align(1) = [_]i32{ 0, 0 },
 };
 
 const AMBI = extern struct {
-    ambient: [4]u8 align(1),
-    sunlight: [4]u8 align(1),
-    fog_color: [4]u8 align(1),
-    fog_density: f32 align(1),
+    ambient: [4]u8 align(1) = [_]u8{ 0, 0, 0, 0 },
+    sunlight: [4]u8 align(1) = [_]u8{ 0, 0, 0, 0 },
+    fog_color: [4]u8 align(1) = [_]u8{ 0, 0, 0, 0 },
+    fog_density: f32 align(1) = 0,
 };
 
 const CNAM = struct {
@@ -70,7 +70,7 @@ const MVRF = union(enum) {
 const FRMR = struct {
     moved: bool = false, // used to mark a FRMR as moved (and therefore can be ignored)
     flag: u4, // deleted, persistent, initially disabled, blocked
-    NAME: []const u8 = undefined,
+    NAME: []const u8 = "",
     XSCL: ?f32 = null,
     ANAM: ?[]const u8 = null,
     BNAM: ?[]const u8 = null,
@@ -88,7 +88,7 @@ const FRMR = struct {
 
 pub const CELL = struct {
     deleted: bool,
-    DATA: DATA = undefined,
+    DATA: DATA = .{},
     NAME: ?[]const u8 = null,
     RGNN: ?[]const u8 = null,
     WHGT: ?f32 = null,
@@ -156,16 +156,13 @@ pub fn parse(
 ) !void {
     var new_header: CELL = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
 
-    var meta: struct {
-        NAME: bool = false,
-        DATA: bool = false,
-    } = .{};
-
     var new_MVRF: std.AutoArrayHashMapUnmanaged(u64, MVRF) = .{};
     var transferred_MVRF = false;
     defer if (!transferred_MVRF) new_MVRF.deinit(allocator);
+
     var pending_deletions: std.AutoArrayHashMapUnmanaged(u64, void) = .{};
     defer pending_deletions.deinit(allocator);
+
     var new_FRMR: std.AutoArrayHashMapUnmanaged(u64, FRMR) = .{};
     var transferred_FRMR = false;
     defer {
@@ -176,83 +173,88 @@ pub fn parse(
     }
     var persists = true;
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    // All fields other than NAME and DELE ignored until DATA is loaded
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_header.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
-
                 // Exteriors always have NAMEs, but they can sometimes be empty strings
                 if (subrecord.payload[0] != 0) new_header.NAME = subrecord.payload;
             },
             .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
                 new_header.DATA = try util.getLittle(DATA, subrecord.payload);
+                break;
             },
-            .RGNN => {
-                if (new_header.RGNN != null) return error.SubrecordRedeclared;
+            else => {},
+        }
+    }
 
-                new_header.RGNN = subrecord.payload;
-            },
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
+            .RGNN => new_header.RGNN = subrecord.payload,
             .NAM5 => {
-                if (new_header.NAM5 != null) return error.SubrecordRedeclared;
                 if (subrecord.payload.len < 4) return error.TooSmall;
-
                 new_header.NAM5 = subrecord.payload[0..4].*;
             },
-            .WHGT => {
-                if (new_header.WHGT != null) return error.SubrecordRedeclared;
-
-                new_header.WHGT = try util.getLittle(f32, subrecord.payload);
-            },
-            // TODO: slice to required size after checking that the payload size is greater/equal
-            // to the required size
-            .AMBI => {
-                if (new_header.AMBI != null) return error.SubrecordRedeclared;
-
-                new_header.AMBI = try util.getLittle(AMBI, subrecord.payload);
-            },
+            .WHGT => new_header.WHGT = try util.getLittle(f32, subrecord.payload),
+            .AMBI => new_header.AMBI = try util.getLittle(AMBI, subrecord.payload),
             .MVRF => {
                 var ref_index: u64 = try util.getLittle(u32, subrecord.payload);
                 ref_index |= @as(u64, masters[subrecord.payload[3]]) << 32;
 
-                var has_destination = false;
+                var destination: ?MVRF = null;
+
                 var deleted = false;
+                var last_pos: u64 = iterator.stream.getPos() catch unreachable;
 
-                var last_pos: u64 = try iterator.stream.getPos();
+                while (iterator.next()) |next_sub| {
+                    const next_tag = try util.parseSub(
+                        logger,
+                        next_sub.tag,
+                        next_sub.pos,
+                        plugin_name,
+                    ) orelse {
+                        last_pos = iterator.stream.getPos() catch unreachable;
+                        break;
+                    };
 
-                while (try iterator.next(logger, plugin_name, start)) |next_sub| {
-                    switch (next_sub.tag) {
+                    switch (next_tag) {
                         .DELE => deleted = true,
-                        .CNAM => {
-                            if (has_destination) return error.SubrecordRedeclared;
-                            has_destination = true;
-
-                            try new_MVRF.put(allocator, ref_index, .{ .CNAM = next_sub.payload });
-                        },
-                        .CNDT => {
-                            if (has_destination) return error.SubrecordRedeclared;
-                            has_destination = true;
-
-                            try new_MVRF.put(
-                                allocator,
-                                ref_index,
-                                .{ .CNDT = try util.getLittle([2]i32, next_sub.payload) },
-                            );
+                        .CNAM => destination = .{ .CNAM = next_sub.payload },
+                        .CNDT => destination = .{
+                            .CNDT = try util.getLittle([2]i32, next_sub.payload),
                         },
                         else => break,
                     }
-                    last_pos = try iterator.stream.getPos();
+                    last_pos = iterator.stream.getPos() catch unreachable;
                 }
 
-                try iterator.stream.seekTo(last_pos);
+                iterator.stream.seekTo(last_pos) catch unreachable;
 
                 if (deleted) try pending_deletions.put(allocator, ref_index, {});
+                if (destination) |dest| switch (dest) {
+                    .CNAM => |cnam| try new_MVRF.put(allocator, ref_index, .{ .CNAM = cnam }),
+                    .CNDT => |cndt| try new_MVRF.put(allocator, ref_index, .{ .CNDT = cndt }),
+                };
             },
             .FRMR => {
                 var ref_index: u64 = @truncate(u24, try util.getLittle(u32, subrecord.payload));
@@ -266,86 +268,96 @@ pub fn parse(
                 var has_name = false;
 
                 var last_pos: u64 = try iterator.stream.getPos();
+                while (iterator.next()) |next_sub| {
+                    const next_tag = try util.parseSub(
+                        logger,
+                        next_sub.tag,
+                        next_sub.pos,
+                        plugin_name,
+                    ) orelse {
+                        iterator.stream.seekTo(last_pos) catch unreachable;
+                        break;
+                    };
 
-                while (try iterator.next(logger, plugin_name, start)) |next_sub| {
-                    switch (next_sub.tag) {
+                    switch (next_tag) {
                         .DELE => frmr.flag |= 0x1,
                         .ZNAM => frmr.flag |= 0x4,
                         .UNAM => frmr.flag |= 0x8,
                         .NAME => {
-                            if (has_name) return error.SubrecordRedeclared;
+                            // Hilariously, having more than one NAME for a FRMR will cause
+                            // Morrowind.exe/the CS to hang while loading.
+                            // OpenMW, on the other hand, simply expects there to only be
+                            // one NAME per FRMR.
+                            if (has_name) continue;
                             has_name = true;
 
                             frmr.NAME = next_sub.payload;
                         },
-                        .CNAM => {
-                            if (frmr.CNAM != null) return error.SubrecordRedeclared;
+                        .CNAM => frmr.CNAM = .{
+                            .faction_id = next_sub.payload,
+                            .rank = blk: {
+                                const pos = iterator.stream.getPos() catch unreachable;
+                                const next = iterator.next() orelse break :blk 0;
 
-                            const should_be_INDX = try iterator.next(
-                                logger,
-                                plugin_name,
-                                start,
-                            ) orelse return error.MissingRequiredSubrecord;
-                            if (should_be_INDX.tag != .INDX) return error.MissingRequiredSubrecord;
+                                if (try util.parseSub(
+                                    logger,
+                                    next.tag,
+                                    next.pos,
+                                    plugin_name,
+                                ) orelse .DELE != .INDX) {
+                                    iterator.stream.seekTo(pos) catch unreachable;
+                                    break :blk 0;
+                                }
 
-                            frmr.CNAM = .{
-                                .faction_id = next_sub.payload,
-                                .rank = try util.getLittle(u32, should_be_INDX.payload),
-                            };
+                                break :blk try util.getLittle(u32, next.payload);
+                            },
                         },
-                        .DODT => {
-                            var dodt: DODT = .{
-                                .destination = try util.getLittle([6]f32, next_sub.payload),
-                            };
+                        .DODT => try new_DODT.append(allocator, .{
+                            .destination = try util.getLittle([6]f32, next_sub.payload),
+                            .DNAM = blk: {
+                                const pos = iterator.stream.getPos() catch unreachable;
+                                const next = iterator.next() orelse break :blk null;
+                                if (try util.parseSub(
+                                    logger,
+                                    next.tag,
+                                    next.pos,
+                                    plugin_name,
+                                ) orelse .DELE != .DNAM) {
+                                    iterator.stream.seekTo(pos) catch unreachable;
+                                    break :blk null;
+                                }
 
-                            const pos = try iterator.stream.getPos();
-                            const maybe_dnam = try iterator.next(logger, plugin_name, start);
-                            if (maybe_dnam != null and maybe_dnam.?.tag == .DNAM) {
-                                dodt.DNAM = maybe_dnam.?.payload;
-                            } else try iterator.stream.seekTo(pos);
-
-                            try new_DODT.append(allocator, dodt);
-                        },
-                        .DATA => {
-                            if (frmr.DATA != null) return error.SubrecordRedeclared;
-
-                            frmr.DATA = try util.getLittle([6]f32, next_sub.payload);
-                        },
+                                break :blk next.payload;
+                            },
+                        }),
+                        .DATA => frmr.DATA = try util.getLittle([6]f32, next_sub.payload),
                         inline .XSCL, .XCHG, .INTV, .NAM9, .FLTV => |known| {
-                            const tag = @tagName(known);
-                            if (@field(frmr, tag) != null) return error.SubrecordRedeclared;
                             const field_type = switch (known) {
                                 .XSCL, .XCHG => f32,
                                 .INTV, .NAM9, .FLTV => u32,
                                 else => unreachable,
                             };
 
+                            const tag = @tagName(known);
                             @field(frmr, tag) = try util.getLittle(field_type, next_sub.payload);
                         },
                         inline .ANAM, .BNAM, .XSOL, .KNAM, .TNAM => |known| {
-                            const tag = @tagName(known);
-                            if (@field(frmr, tag) != null) return error.SubrecordRedeclared;
-
-                            @field(frmr, tag) = next_sub.payload;
+                            @field(frmr, @tagName(known)) = next_sub.payload;
                         },
                         else => break,
                     }
-                    last_pos = try iterator.stream.getPos();
+                    last_pos = iterator.stream.getPos() catch unreachable;
                 }
 
-                try iterator.stream.seekTo(last_pos);
-
-                if (!has_name) return error.MissingRequiredSubrecord;
+                iterator.stream.seekTo(last_pos) catch unreachable;
 
                 try new_FRMR.put(allocator, ref_index, frmr);
             },
             .NAM0 => persists = false,
-            .INTV => {}, // rogue INTV in Morrowind.esm
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .INTV => {}, // rogue INTVs in Morrowind.esm
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
-
-    if (!meta.DATA) return error.MissingRequiredSubrecord;
 
     const is_interior = new_header.DATA.flags & 0x1 != 0;
     if (is_interior) {

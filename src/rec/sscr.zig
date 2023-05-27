@@ -4,7 +4,7 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 deleted: bool,
-DATA: []const u8 = undefined,
+DATA: ?[]const u8 = null,
 
 const SSCR = @This();
 
@@ -18,45 +18,30 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SSCR: SSCR = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        DATA: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_SSCR.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_SSCR.DATA = subrecord.payload;
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .NAME => NAME = subrecord.payload,
+            .DATA => new_SSCR.DATA = subrecord.payload,
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_SSCR.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_SSCR);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_SSCR);
 }
 
 pub fn writeAll(

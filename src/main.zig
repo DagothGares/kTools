@@ -42,11 +42,13 @@ fn printVersionInfo(allocator: std.mem.Allocator, writer: anytype) !void {
             // can't be bothered to implement ISO 8601 on my own. (There's a library for it,
             // but it requires an additional dependency that I don't want to deal with.)
             "Timestamp:       \t{d}\n" ++
+            "Zig version:     \t{s}\n" ++
             "Build Mode:      \t{s}\n",
         .{
             build_info.semantic_version orelse "UNDEFINED",
             formatted_hash,
             build_info.date_time,
+            builtin.zig_version_string,
             @tagName(builtin.mode),
         },
     );

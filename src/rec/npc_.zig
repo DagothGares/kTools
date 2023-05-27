@@ -19,32 +19,33 @@ const NPDT_12 = extern struct {
 };
 
 const NPDT_52 = extern struct {
-    level: u16 align(1),
-    attributes: [8]u8 align(1),
-    skills: [27]u8 align(1),
-    _garbage: u8 align(1),
-    health: u16 align(1),
-    magicka: u16 align(1),
-    fatigue: u16 align(1),
-    disposition: u8 align(1),
-    reputation: u8 align(1),
-    rank: u8 align(1),
-    _garbage2: u8 align(1),
-    gold: u32 align(1),
+    level: u16 align(1) = 0,
+    attributes: [8]u8 align(1) = [_]u8{0} ** 8,
+    skills: [27]u8 align(1) = [_]u8{0} ** 27,
+    _garbage: u8 align(1) = 0,
+    health: u16 align(1) = 0,
+    magicka: u16 align(1) = 0,
+    fatigue: u16 align(1) = 0,
+    disposition: u8 align(1) = 0,
+    reputation: u8 align(1) = 0,
+    rank: u8 align(1) = 0,
+    _garbage2: u8 align(1) = 0,
+    gold: u32 align(1) = 0,
 };
 
 flag: u2,
-FLAG: u32 = undefined,
-RNAM: []const u8 = undefined,
-CNAM: []const u8 = undefined,
-BNAM: []const u8 = undefined,
-NPDT: union { short: NPDT_12, long: NPDT_52 } = undefined,
+FLAG: u32 = 0,
+AIDT: AIDT = .{},
+// TODO: verify
+NPDT: union { short: NPDT_12, long: NPDT_52 } = .{ .long = .{} },
+RNAM: ?[]const u8 = null,
+CNAM: ?[]const u8 = null,
+BNAM: ?[]const u8 = null,
 ANAM: ?[]const u8 = null,
 KNAM: ?[]const u8 = null,
 MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
-AIDT: ?AIDT = null,
 NPCO: ?[]NPCO = null,
 NPCS: ?[][]const u8 = null,
 DODT: ?[]DODT = null,
@@ -62,15 +63,7 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_NPC: NPC_ = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
-
-    var meta: struct {
-        FLAG: bool = false,
-        RNAM: bool = false,
-        CNAM: bool = false,
-        BNAM: bool = false,
-        NPDT: bool = false,
-    } = .{};
+    var NAME: []const u8 = "";
 
     var new_NPCO: std.ArrayListUnmanaged(NPCO) = .{};
     defer new_NPCO.deinit(allocator);
@@ -81,53 +74,35 @@ pub fn parse(
     var new_AI: std.ArrayListUnmanaged(AI__) = .{};
     defer new_AI.deinit(allocator);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_NPC.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
+            .NAME => NAME = subrecord.payload,
+            .FLAG => new_NPC.FLAG = try util.getLittle(u32, subrecord.payload),
+            .NPDT => switch (subrecord.payload.len) {
+                1...11 => return error.TooSmall,
+                12...51 => new_NPC.NPDT = .{
+                    .short = util.getLittle(NPDT_12, subrecord.payload) catch unreachable,
+                },
+                else => new_NPC.NPDT = .{
+                    .long = util.getLittle(NPDT_52, subrecord.payload) catch unreachable,
+                },
             },
-            .FLAG => {
-                if (meta.FLAG) return error.SubrecordRedeclared;
-                meta.FLAG = true;
-
-                new_NPC.FLAG = try util.getLittle(u32, subrecord.payload);
-            },
-            .NPDT => {
-                if (meta.NPDT) return error.SubrecordRedeclared;
-                meta.NPDT = true;
-
-                switch (subrecord.payload.len) {
-                    1...11 => return error.TooSmall,
-                    12...51 => new_NPC.NPDT = .{
-                        .short = util.getLittle(NPDT_12, subrecord.payload) catch unreachable,
-                    },
-                    else => new_NPC.NPDT = .{
-                        .long = util.getLittle(NPDT_52, subrecord.payload) catch unreachable,
-                    },
-                }
-            },
-            inline .RNAM, .CNAM, .BNAM => |known| {
-                const tag = @tagName(known);
-                if (@field(meta, tag)) return error.SubrecordRedeclared;
-                @field(meta, tag) = true;
-
-                @field(new_NPC, tag) = subrecord.payload;
-            },
-            .AIDT => {
-                if (new_NPC.AIDT != null) return error.SubrecordRedeclared;
-
-                new_NPC.AIDT = try util.getLittle(AIDT, subrecord.payload);
-            },
-            inline .ANAM, .KNAM, .MODL, .FNAM, .SCRI => |known| {
-                const tag = @tagName(known);
-                if (@field(new_NPC, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_NPC, tag) = subrecord.payload;
+            .AIDT => new_NPC.AIDT = try util.getLittle(AIDT, subrecord.payload),
+            inline .RNAM, .CNAM, .BNAM, .ANAM, .KNAM, .MODL, .FNAM, .SCRI => |known| {
+                @field(new_NPC, @tagName(known)) = subrecord.payload;
             },
             .NPCO => {
                 if (subrecord.payload.len < 36) return error.TooSmall;
@@ -138,17 +113,23 @@ pub fn parse(
                 });
             },
             .NPCS => try new_NPCS.append(allocator, subrecord.payload),
-            .DODT => {
-                var dodt: DODT = .{ .destination = try util.getLittle([6]f32, subrecord.payload) };
-
-                const pos = try iterator.stream.getPos();
-                const maybe_dnam = try iterator.next(logger, plugin_name, start);
-                if (maybe_dnam != null and maybe_dnam.?.tag == .DNAM) {
-                    dodt.DNAM = maybe_dnam.?.payload;
-                } else try iterator.stream.seekTo(pos);
-
-                try new_DODT.append(allocator, dodt);
-            },
+            .DODT => try new_DODT.append(allocator, .{
+                .destination = try util.getLittle([6]f32, subrecord.payload),
+                .DNAM = blk: {
+                    const pos = iterator.stream.getPos() catch unreachable;
+                    const next = iterator.next() orelse break :blk null;
+                    if (try util.parseSub(
+                        logger,
+                        next.tag,
+                        next.pos,
+                        plugin_name,
+                    ) orelse .DELE != .DNAM) {
+                        iterator.stream.seekTo(pos) catch unreachable;
+                        break :blk null;
+                    }
+                    break :blk next.payload;
+                },
+            }),
             inline .AI_A, .AI_T, .AI_W => |known| {
                 const tag = switch (known) {
                     .AI_A => "A",
@@ -179,50 +160,44 @@ pub fn parse(
                     subrecord.payload,
                 ) });
 
-                const pos = try iterator.stream.getPos();
-                const maybe_cndt = try iterator.next(logger, plugin_name, start);
-                if (maybe_cndt != null and maybe_cndt.?.tag == .CNDT) {
-                    @field(ai_ef, tag).CNDT = maybe_cndt.?.payload;
-                } else try iterator.stream.seekTo(pos);
+                const pos = iterator.stream.getPos() catch unreachable;
+                const next = iterator.next();
+
+                if (next != null and try util.parseSub(
+                    logger,
+                    next.?.tag,
+                    next.?.pos,
+                    plugin_name,
+                ) orelse .DELE == .CNDT) {
+                    @field(ai_ef, tag).CNDT = next.?.payload;
+                } else iterator.stream.seekTo(pos) catch unreachable;
 
                 try new_AI.append(allocator, ai_ef);
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_NPC.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    if (record_map.get(NAME)) |crea| {
+        if (crea.NPCO) |npco| allocator.free(npco);
+        if (crea.NPCS) |npcs| allocator.free(npcs);
+        if (crea.DODT) |dodt| allocator.free(dodt);
+        if (crea.AI__) |ai__| allocator.free(ai__);
+    }
 
-        if (record_map.get(name)) |crea| {
-            if (crea.NPCO) |npco| allocator.free(npco);
-            if (crea.NPCS) |npcs| allocator.free(npcs);
-            if (crea.DODT) |dodt| allocator.free(dodt);
-            if (crea.AI__) |ai__| allocator.free(ai__);
-        }
+    if (new_NPCO.items.len > 0) new_NPC.NPCO = try new_NPCO.toOwnedSlice(allocator);
+    errdefer if (new_NPC.NPCO) |npco| allocator.free(npco);
 
-        if (new_NPCO.items.len > 0) new_NPC.NPCO = try new_NPCO.toOwnedSlice(allocator);
-        errdefer if (new_NPC.NPCO) |npco| allocator.free(npco);
+    if (new_NPCS.items.len > 0) new_NPC.NPCS = try new_NPCS.toOwnedSlice(allocator);
+    errdefer if (new_NPC.NPCS) |npcs| allocator.free(npcs);
 
-        if (new_NPCS.items.len > 0) new_NPC.NPCS = try new_NPCS.toOwnedSlice(allocator);
-        errdefer if (new_NPC.NPCS) |npcs| allocator.free(npcs);
+    if (new_DODT.items.len > 0) new_NPC.DODT = try new_DODT.toOwnedSlice(allocator);
+    errdefer if (new_NPC.DODT) |dodt| allocator.free(dodt);
 
-        if (new_DODT.items.len > 0) new_NPC.DODT = try new_DODT.toOwnedSlice(allocator);
-        errdefer if (new_NPC.DODT) |dodt| allocator.free(dodt);
+    if (new_AI.items.len > 0) new_NPC.AI__ = try new_AI.toOwnedSlice(allocator);
+    errdefer if (new_NPC.AI__) |ai__| allocator.free(ai__);
 
-        if (new_AI.items.len > 0) new_NPC.AI__ = try new_AI.toOwnedSlice(allocator);
-        errdefer if (new_NPC.AI__) |ai__| allocator.free(ai__);
-
-        return record_map.put(allocator, name, new_NPC);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_NPC);
 }
 
 inline fn writeNpdtAi(

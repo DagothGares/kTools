@@ -5,17 +5,17 @@ const subs = util.subs;
 
 const RADT = extern struct {
     skill_bonuses: [7]extern struct {
-        id: i32 align(1),
-        modifier: i32 align(1),
-    } align(1),
-    attributes: [8][2]u32 align(1),
-    height: [2]f32 align(1),
-    weight: [2]f32 align(1),
-    flags: u32 align(1),
+        id: i32 align(1) = 0,
+        modifier: i32 align(1) = 0,
+    } align(1) = .{.{}} ** 7,
+    attributes: [8][2]u32 align(1) = [_][2]u32{.{ 0, 0 }} ** 8,
+    height: [2]f32 align(1) = [_]f32{0} ** 2,
+    weight: [2]f32 align(1) = [_]f32{0} ** 2,
+    flags: u32 align(1) = 0,
 };
 
 deleted: bool,
-RADT: RADT = undefined,
+RADT: RADT = .{},
 FNAM: ?[]const u8 = null,
 DESC: ?[]const u8 = null,
 NPCS: ?[][]const u8 = null,
@@ -32,60 +32,42 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_RACE: RACE = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
-
-    var meta: struct {
-        RADT: bool = false,
-    } = .{};
+    var NAME: []const u8 = "";
 
     var new_NPCS: std.ArrayListUnmanaged([]const u8) = .{};
     defer new_NPCS.deinit(allocator);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_RACE.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .RADT => {
-                if (meta.RADT) return error.SubrecordRedeclared;
-                meta.RADT = true;
-
-                new_RACE.RADT = try util.getLittle(RADT, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .RADT => new_RACE.RADT = try util.getLittle(RADT, subrecord.payload),
             inline .FNAM, .DESC => |known| {
-                const tag = @tagName(known);
-                if (@field(new_RACE, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_RACE, tag) = subrecord.payload;
+                @field(new_RACE, @tagName(known)) = subrecord.payload;
             },
             .NPCS => try new_NPCS.append(allocator, subrecord.payload),
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_RACE.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    if (record_map.get(NAME)) |race| if (race.NPCS) |npcs| allocator.free(npcs);
 
-        if (record_map.get(name)) |race| if (race.NPCS) |npcs| allocator.free(npcs);
+    if (new_NPCS.items.len > 0) new_RACE.NPCS = try new_NPCS.toOwnedSlice(allocator);
+    errdefer if (new_RACE.NPCS) |npcs| allocator.free(npcs);
 
-        if (new_NPCS.items.len > 0) new_RACE.NPCS = try new_NPCS.toOwnedSlice(allocator);
-        errdefer if (new_RACE.NPCS) |npcs| allocator.free(npcs);
-
-        return record_map.put(allocator, name, new_RACE);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_RACE);
 }
 
 pub fn writeAll(

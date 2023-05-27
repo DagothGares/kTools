@@ -478,26 +478,23 @@ pub fn parseRec(logger: Logger, plugin: []const u8, pos: u64, rec: u32) !recs {
     };
 }
 
-pub fn parseSub(logger: Logger, plugin: []const u8, pos: u64, sub: u32) !subs {
+pub fn parseSub(logger: Logger, sub: u32, pos: u64, plugin: []const u8) !?subs {
     return std.meta.intToEnum(subs, sub) catch {
-        try logger.err(
-            "{s}: Expected any subrecord at 0x{X}, got \"{s}\"\n",
-            .{
-                plugin,
-                pos,
-                @ptrCast(*const [4]u8, &sub),
-            },
-        );
-        return error.ParserFailure;
+        try logger.warn("{s}: Encountered unknown subrecord type {s} at 0x{X}\n", .{
+            plugin,
+            @bitCast([4]u8, sub),
+            pos,
+        });
+        return null;
     };
 }
 
-pub fn errUnexpectedSubrecord(logger: Logger, sub: subs) anyerror {
-    try logger.err(
-        "Expected valid subrecord, got \"{s}\"\n",
-        .{@tagName(sub)},
-    );
-    return error.ParserFailure;
+pub fn warnUnexpectedSubrecord(logger: Logger, sub: subs, pos: u64, plugin: []const u8) !void {
+    return logger.warn("{s}: Encountered unexpected subrecord type {s} at 0x{X}\n", .{
+        plugin,
+        @tagName(sub),
+        pos,
+    });
 }
 
 pub const recs = enum(u32) {

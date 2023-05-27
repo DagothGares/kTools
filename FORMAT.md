@@ -1,6 +1,6 @@
-kTools outputs a database of JSON files, with each record being contained in a single file. Each record type has its' own folder; activators are stored in ACTI, factions in FACT, and so on. For quickly iterating over/searching all records of a given type without querying the filesystem, there are a set of 'lists' contained in <output>/list, with each file being an array of filenames for a given record type.
+kTools outputs a database of JSON files, with each record being contained in a single file. Each record type has its' own folder; activators are stored in ACTI, factions in FACT, and so on. For quickly iterating over/searching all records of a given type without querying the filesystem, there are a set of 'lists' contained in _your output directory_/list, with each file being an array of filenames for a given record type.
 
-All record names and strings are translated to UTF-8. Specific output depends on the Windows codepage you select when running kTools; by default, it chooses Windows-1252, which is the Latin codepage. All strings are also trimmed of their null byte endings.
+All strings (including record names) are translated to UTF-8. Specific output depends on the Windows codepage you select when running kTools; by default, it chooses Windows-1252, which is the Latin codepage. All strings are also trimmed of their null byte endings.
 
 Record names also have the following characters replaced, so they can serve as valid filenames:
 
@@ -8,12 +8,21 @@ Record names also have the following characters replaced, so they can serve as v
 
   ``.`` (replaced with ``,``)
 
-  ``:`` (replaced with ``;``
+  ``:`` (replaced with ``;``)
 
 Note that slashes and backslashes are not replaced; it wasn't necessary to remove them, so you can occasionally see paths such as ``LEVI/t_mw_random_foodm1/2.json``.
 
-The format of each record type mostly matches up with what's shown in [the uesp](https://en.uesp.net/wiki/Morrowind_Mod:Mod_File_Format), though there are some deviations.
-One major deviation across all record types is that kTools does not store most record flags. All valid flags are stored at the top level of a record / form reference with the following field names:
+The format of each record type _somewhat_ matches up with what's shown in [the Unofficial Elder Scrolls Pages](https://en.uesp.net/wiki/Morrowind_Mod:Mod_File_Format). There are several differences between kTools' output and what the UESP says to expect, explained below.
+
+Firstly, it is possible for a record type to have no identifier; when this happens, it is replaced with either an empty string (resulting in the filename ``".json"``), or zero-filled if it is an integer (becoming, for example, [0, 0] for ``LAND`` records).
+
+Secondly, any subrecord type that is a string may be null. These are simply represented as ``null`` values in the output. The only exceptions to this are subrecords intended to identify the record (explained above), or ``INFO:PNAM`` and ``INFO:NNAM``, which are always empty strings if missing.
+
+Lastly, any struct that can only appear once for a record (for example, ``ALCH:ALDT``) will always exist; if it is not defined by the record, it is zero-filled (for struct fields that are intended to be strings, this means that they are filled with null bytes).
+
+Other things of note:
+
+kTools does not store most record flags. All valid flags are stored at the top level of a record / form reference with the following field names:
 
   ``deleted``
 
@@ -23,7 +32,7 @@ One major deviation across all record types is that kTools does not store most r
 
   ``blocked`` (for FRMRs; note that you can ignore this field entirely, as it is irrelevant in Morrowind)
 
-Another major deviation across all record types is that files do not store their identifiers, since you get that automatically from the filename. The only exceptions to this are CELLs, since exteriors can have a display name stored, which means interiors also store a copy of their name (minus the sanitization necessary to make them valid filenames).
+Files do not store their identifiers inside the file itself, since you get that automatically from the filename. The only exceptions to this are CELLs, since exteriors can have a display name stored, which means interiors also store an (unsanitized) copy of their name.
 
 The last major deviation across all record types that I'll mention is that all field names that are not referencing a subrecord type are in ``snake_case``. For example, ``CELL:AMBI`` looks like:
   ```json
@@ -35,14 +44,17 @@ The last major deviation across all record types that I'll mention is that all f
   }
   ```
 
-As far as the field names for structs in individual records (and whether or not subrecords are guaranteed to exist for a given subrecord, you can check ``src/rec/`` and see the structure for records yourself. For example, ``ACTI`` has the following fields:
+As far as the field names for structs in individual records (and whether or not subrecords are guaranteed to exist for a given record), you can check ``src/rec/`` and see the structure for records yourself. For example, ``ALCH`` has the following fields:
 ```zig
-flag: u2, // this gets turned into 'deleted' and 'persistent' in the output
-MODL: []const u8 = undefined, // this is a guaranteed field, that is stored as a string
-FNAM: []const u8 = undefined, // same as above
-SCRI: ?[]const u8 = null, // This is an optional field, so be sure to check if it exists before using it for a given record!
+flag: u2, // This turns into the 'deleted' and 'persistent' fields in the output. If a record can only be deleted, this will be 'deleted: bool', instead.
+ALDT: ALDT = .{}, // This is a struct. The ``.{}`` indicates that it is initialized in its' default state until it is overwritten; for most structs, this means that all fields are set to ``0``.
+MODL: ?[]const u8 = null, // This is an optional string. Required strings (such as INFO:PNAM) instead look like 'PNAM: []const u8 = ""'.
+TEXT: ?[]const u8 = null,
+SCRI: ?[]const u8 = null,
+FNAM: ?[]const u8 = null,
+ENAM: ?[]ENAM = null, // This is an optional array of structs. If there are no ENAM entries in the specific record instance, it will remain null.
 ```
-The only major deviations from this form that I can think of offhand are that fields prefixed ``_garbage`` are not stored in the output, and that some types of subrecords are stored as Objects instead of Arrays. ``ARMO:INDX`` and ``CLOT:INDX`` both look like this:
+The only major deviations from this form that I can think of offhand are that fields prefixed ``_garbage`` are not stored in the output, redundant fields (such as the 'dialogue type' field in ``INFO:DATA``) are ignored, and that some types of subrecords are stored as Objects instead of Arrays. ``ARMO:INDX`` and ``CLOT:INDX`` both look like this:
 ```json
 "INDX": {
   "16": {
@@ -64,6 +76,7 @@ The only major deviations from this form that I can think of offhand are that fi
 }
 ```
 where each key is an INDX (biped slot) and the values are BNAM and/or CNAM fields (part model names).
+
 ``FACT:ANAM`` looks like this:
 ```json
 "ANAM": {
@@ -127,6 +140,57 @@ where each key is the name of another faction, and the value is the INTV subreco
 ]
 ```
 Note that the definition of the union type is ``AI__``, which can be found in ``src/rec/shared.zig``.
+
+``INFO`` records are actually stored as part of the ``DIAL`` record they are attached to, as a hashmap. For example, this is the ``DIAL`` record ``[a1_dreams]``:
+```json
+{
+  "deleted": false,
+  "DATA": 4,
+  "INFO": {
+    "93357471205120343": {
+      "flag": 0,
+      "DATA": {
+        "value": 1,
+        "rank": -1,
+        "gender": -1,
+        "player_rank": -1
+      },
+      "PNAM": "8888287693085825729",
+      "NNAM": "246182292946328748",
+      "ONAM": null,
+      "RNAM": null,
+      "CNAM": null,
+      "FNAM": null,
+      "ANAM": null,
+      "DNAM": null,
+      "SNAM": null,
+      "NAME": "<snip>",
+      "BNAM": null,
+      "SCVR": null
+    },
+    "246182292946328748": {
+      "flag": 0,
+      "DATA": {
+        "value": 5,
+        "rank": -1,
+        "gender": -1,
+        "player_rank": -1
+      },
+      "PNAM": "93357471205120343",
+      "NNAM": "3138830649292862176",
+      "ONAM": null,
+      "RNAM": null,
+      "CNAM": null,
+      "FNAM": null,
+      "ANAM": null,
+      "DNAM": null,
+      "SNAM": null,
+      "NAME": "<snip>",
+      "BNAM": null,
+      "SCVR": null
+    },
+```
+Note that kTools does not filter this output, so you may find ``INFO`` fields that technically do not appear ingame, or ``PNAM``/``NNAM`` fields that link to nonexistent or deleted ``INFO``s.
 
 Lastly, form references ``CELL:FRMR`` are stored as a hashmap. For example:
 ```json

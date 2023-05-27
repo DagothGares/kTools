@@ -6,17 +6,17 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const CTDT = extern struct {
-    clothing_type: u32 align(1),
-    weight: f32 align(1),
-    value: u16 align(1),
-    enchant_points: u16 align(1),
+    clothing_type: u32 align(1) = 0,
+    weight: f32 align(1) = 0,
+    value: u16 align(1) = 0,
+    enchant_points: u16 align(1) = 0,
 };
 
 const INDX = @import("shared.zig").INDX;
 
 flag: u2,
-MODL: []const u8 = undefined,
-CTDT: CTDT = undefined,
+CTDT: CTDT = .{},
+MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
@@ -35,89 +35,69 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_CLOT: CLOT = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
-
-    var meta: struct {
-        MODL: bool = false,
-        CTDT: bool = false,
-    } = .{};
+    var NAME: []const u8 = "";
 
     var new_INDX: std.ArrayListUnmanaged(INDX) = .{};
     defer new_INDX.deinit(allocator);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_CLOT.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .MODL => {
-                if (meta.MODL) return error.SubrecordRedeclared;
-                meta.MODL = true;
-
-                new_CLOT.MODL = subrecord.payload;
-            },
-            .CTDT => {
-                if (meta.CTDT) return error.SubrecordRedeclared;
-                meta.CTDT = true;
-
-                new_CLOT.CTDT = try util.getLittle(CTDT, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .CTDT => new_CLOT.CTDT = try util.getLittle(CTDT, subrecord.payload),
             .INDX => {
-                std.debug.assert(subrecord.payload.len == 1);
                 var indx: INDX = .{ .index = subrecord.payload[0] };
 
                 var last_pos: u64 = try iterator.stream.getPos();
+                while (iterator.next()) |next_sub| {
+                    const next_tag = try util.parseSub(
+                        logger,
+                        next_sub.tag,
+                        next_sub.pos,
+                        plugin_name,
+                    ) orelse {
+                        // avoid warning twice for the same sub
+                        last_pos = iterator.stream.getPos() catch unreachable;
+                        break;
+                    };
 
-                while (try iterator.next(logger, plugin_name, start)) |next_sub| {
-                    switch (next_sub.tag) {
+                    switch (next_tag) {
                         inline .BNAM, .CNAM => |known| {
-                            const tag = @tagName(known);
-                            if (@field(indx, tag) != null) continue;
-
-                            @field(indx, tag) = next_sub.payload;
+                            @field(indx, @tagName(known)) = next_sub.payload;
                         },
                         else => break,
                     }
-                    last_pos = try iterator.stream.getPos();
+                    last_pos = iterator.stream.getPos() catch unreachable;
                 }
-
-                try iterator.stream.seekTo(last_pos);
+                iterator.stream.seekTo(last_pos) catch unreachable;
 
                 try new_INDX.append(allocator, indx);
             },
-            inline .FNAM, .SCRI, .ITEX, .ENAM => |known| {
-                const tag = @tagName(known);
-                if (@field(new_CLOT, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_CLOT, tag) = subrecord.payload;
+            inline .MODL, .FNAM, .SCRI, .ITEX, .ENAM => |known| {
+                @field(new_CLOT, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_CLOT.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    if (record_map.get(NAME)) |clot| if (clot.INDX) |indx| allocator.free(indx);
 
-        if (record_map.get(name)) |clot| if (clot.INDX) |indx| allocator.free(indx);
+    if (new_INDX.items.len > 0) new_CLOT.INDX = try new_INDX.toOwnedSlice(allocator);
+    errdefer if (new_CLOT.INDX) |indx| allocator.free(indx);
 
-        if (new_INDX.items.len > 0) new_CLOT.INDX = try new_INDX.toOwnedSlice(allocator);
-        errdefer if (new_CLOT.INDX) |indx| allocator.free(indx);
-
-        return record_map.put(allocator, name, new_CLOT);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_CLOT);
 }
 
 inline fn writeIndx(

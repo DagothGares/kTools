@@ -3,8 +3,8 @@ kTools is a (work-in-progress) parser for Morrowind's ESM and ESP file format. I
 
 ## Building
 You need:
-- A build of Zig 0.11 (last tested with 0.11.0-dev.3198+ad20236e9), which you can get from either [the main site](https://ziglang.org/download/) or by using [zigup](https://github.com/marler8997/zigup)
-- (optional) git, to grab the necessary [zig-args](https://github.com/MasterQ32/zig-args) submodule
+- A build of Zig 0.11, which you can get from either [the main site](https://ziglang.org/download/) or by using [zigup](https://github.com/marler8997/zigup)
+- (optional) [git](https://git-scm.com/), to grab the necessary [zig-args](https://github.com/MasterQ32/zig-args) submodule
 
 ### Using git:
 
@@ -20,7 +20,6 @@ Get [zig-args](https://github.com/MasterQ32/zig-args) from its' repo and put it 
 ``zig build -Doptimize=ReleaseSafe`` (the available options are Debug, ReleaseSafe (recommended), ReleaseSmall, and ReleaseFast)
 
 ## Using kTools
-
 Make a json file that contains an array of plugin paths and hashes, like so:
 ```json
 [
@@ -37,7 +36,11 @@ It is recommended to use full paths. (Start from the drive letter on Windows, or
 
 Note that while you are allowed to specify multiple hashes for each file, only the first hash is checked, to ensure that the data generated is authoritative.
 
-Then, run ``kTools.exe <load_order.json> <output_directory>``, where ``<load_order.json>`` is the json file you created, and ``<output_directory>`` is where you want the database to be generated (preferably, an empty directory).
+Then, run ``kTools <load_order.json> <output_directory>``, where ``<load_order.json>`` is the json file you created, and ``<output_directory>`` is where you want the database to be generated (preferably, an empty directory).
+
+Note that you will need to change what codepage you are using, if you are reading plugins with non-Latin text. You can set the codepage by defining the ``--codepage`` option when running kTools.
+
+``kTools --help`` outputs a help page showing available commands and settings.
 
 ## Reading the output
 see FORMAT.md

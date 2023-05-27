@@ -3,8 +3,14 @@ const util = @import("../util.zig");
 
 const subs = util.subs;
 
+const __TV = union {
+    FL: f32,
+    IN: i32,
+    ST: []const u8,
+};
+
 deleted: bool,
-__TV: union { FL: f32, IN: i32, ST: []const u8 } = undefined,
+__TV: __TV = undefined,
 
 const GMST = @This();
 
@@ -18,26 +24,27 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_GMST: GMST = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        __TV: bool = false,
-    } = .{};
+    var tv: ?__TV = null;
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_GMST.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
+            .NAME => NAME = subrecord.payload,
             inline .FLTV, .INTV, .STRV => |known| {
-                if (meta.__TV) return error.SubrecordRedeclared;
-                meta.__TV = true;
-
                 const tag = switch (known) {
                     .FLTV => "FL",
                     .INTV => "IN",
@@ -51,22 +58,20 @@ pub fn parse(
                     else => unreachable,
                 };
 
-                new_GMST.__TV = @unionInit(@TypeOf(new_GMST.__TV), tag, content);
+                tv = @unionInit(@TypeOf(new_GMST.__TV), tag, content);
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        if (!meta.__TV) switch (name[0]) {
-            'f' => new_GMST.__TV = .{ .FL = 0 },
-            'i' => new_GMST.__TV = .{ .IN = 0 },
-            's' => new_GMST.__TV = .{ .ST = "" },
-            else => return error.Invalid_GMST_Tag,
-        };
+    if (tv == null) switch (NAME[0]) {
+        'f' => new_GMST.__TV = .{ .FL = 0 },
+        'i' => new_GMST.__TV = .{ .IN = 0 },
+        's' => new_GMST.__TV = .{ .ST = "" },
+        else => return error.Invalid_GMST_Tag,
+    } else new_GMST.__TV = tv.?;
 
-        return record_map.put(allocator, name, new_GMST);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_GMST);
 }
 
 inline fn writeTv(

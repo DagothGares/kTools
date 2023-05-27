@@ -12,15 +12,15 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const HEDR = extern struct {
-    version: f32 align(1),
-    flags: u32 align(1),
-    creator: [32]u8 align(1),
-    file_description: [256]u8 align(1),
-    num_records: u32 align(1),
+    version: f32 align(1) = 1.2,
+    flags: u32 align(1) = 0,
+    creator: [32]u8 align(1) = [_]u8{0} ** 32,
+    file_description: [256]u8 align(1) = [_]u8{0} ** 256,
+    // num_records is ignored because Morrowind doesn't even use it
 };
 
-HEDR: HEDR,
-masters: []u32,
+HEDR: HEDR = .{},
+masters: []u32 = &[_]u32{},
 
 const TES3 = @This();
 
@@ -34,32 +34,42 @@ pub fn parse(
 ) !TES3 {
     var new_TES3: TES3 = undefined;
 
-    var meta: struct {
-        HEDR: bool = false,
-    } = .{};
-
     var masters = try std.ArrayListUnmanaged(u32).initCapacity(allocator, 1);
     defer masters.deinit(allocator);
     masters.appendAssumeCapacity(plugin_index);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = 0,
+    };
 
-    while (try iterator.next(logger, plugin_name, 0)) |subrecord| {
-        switch (subrecord.tag) {
-            .HEDR => {
-                if (meta.HEDR) return error.SubrecordRedeclared;
-                meta.HEDR = true;
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-                new_TES3.HEDR = try util.getLittle(HEDR, subrecord.payload);
-            },
+        switch (sub_tag) {
+            .HEDR => new_TES3.HEDR = try util.getLittle(HEDR, subrecord.payload),
             .MAST => {
-                const should_be_DATA = try iterator.next(logger, plugin_name, 0);
-                if (should_be_DATA == null or should_be_DATA.?.tag != .DATA) {
-                    return error.MissingRequiredSubrecord;
+                const pos = iterator.stream.getPos() catch unreachable;
+                const next = iterator.next();
+                if (next == null or try util.parseSub(
+                    logger,
+                    next.?.tag,
+                    next.?.pos,
+                    plugin_name,
+                ) orelse .DELE != .DATA) {
+                    iterator.stream.seekTo(pos) catch unreachable;
                 }
 
-                const strip_pos = std.mem.indexOf(u8, subrecord.payload, "\x00") orelse subrecord.payload.len;
-
+                const strip_pos = std.mem.indexOf(
+                    u8,
+                    subrecord.payload,
+                    "\x00",
+                ) orelse subrecord.payload.len;
                 const substring = subrecord.payload[0..strip_pos];
 
                 var found = false;
@@ -71,11 +81,9 @@ pub fn parse(
                 }
                 if (!found) return error.MissingMaster;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
-
-    if (!meta.HEDR) return error.MissingRequiredSubrecord;
 
     new_TES3.masters = try masters.toOwnedSlice(allocator);
 

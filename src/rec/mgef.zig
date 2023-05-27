@@ -4,17 +4,17 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const MEDT = extern struct {
-    school: u32 align(1),
-    base_cost: f32 align(1),
-    flags: u32 align(1),
-    rgb: [3]u32 align(1),
-    speed_mult: f32 align(1),
-    size_mult: f32 align(1),
-    size_cap: f32 align(1),
+    school: u32 align(1) = 0,
+    base_cost: f32 align(1) = 0,
+    flags: u32 align(1) = 0,
+    rgb: [3]u32 align(1) = [_]u32{0} ** 3,
+    speed_mult: f32 align(1) = 0,
+    size_mult: f32 align(1) = 0,
+    size_cap: f32 align(1) = 0,
 };
 
 deleted: bool,
-MEDT: MEDT = undefined,
+MEDT: MEDT = .{},
 ITEX: ?[]const u8 = null,
 PTEX: ?[]const u8 = null,
 BSND: ?[]const u8 = null,
@@ -39,54 +39,36 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_MGEF: MGEF = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INDX: ?u32 = null;
+    var INDX: u32 = 0;
 
-    var meta: struct {
-        MEDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_MGEF.deleted = true,
-            .INDX => {
-                if (INDX != null) return error.SubrecordRedeclared;
-
-                INDX = try util.getLittle(u32, subrecord.payload);
-            },
-            .MEDT => {
-                if (meta.MEDT) return error.SubrecordRedeclared;
-                meta.MEDT = true;
-
-                new_MGEF.MEDT = try util.getLittle(MEDT, subrecord.payload);
-            },
+            .INDX => INDX = try util.getLittle(u32, subrecord.payload),
+            .MEDT => new_MGEF.MEDT = try util.getLittle(MEDT, subrecord.payload),
             // zig fmt: off
             inline .ITEX, .PTEX, .BSND, .CSND, .HSND, .ASND, .CVFX, .BVFX, .HVFX, .AVFX,
             .DESC => |known| {
                 // zig fmt: on
-                const tag = @tagName(known);
-                if (@field(new_MGEF, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_MGEF, tag) = subrecord.payload;
+                @field(new_MGEF, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (INDX) |indx| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_MGEF.deleted) {
-                    if (record_map.getPtr(indx)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, indx, new_MGEF);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, INDX, new_MGEF);
 }
 
 pub fn writeAll(

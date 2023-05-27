@@ -4,7 +4,7 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 deleted: bool,
-FNAM: u8 = undefined,
+FNAM: u8 = undefined, // TODO: determine what Morrowind chooses by default
 FLTV: union { short: i16, long: i32, float: f32 } = undefined,
 
 const GLOB = @This();
@@ -19,69 +19,48 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_GLOB: GLOB = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        FNAM: bool = false,
-        FLTV: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_GLOB.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .FNAM => {
-                if (meta.FNAM) return error.SubrecordRedeclared;
-                meta.FNAM = true;
-
-                new_GLOB.FNAM = subrecord.payload[0];
-            },
-            .FLTV => {
-                if (meta.FLTV) return error.SubrecordRedeclared;
-                meta.FLTV = true;
-
-                new_GLOB.FLTV = .{ .float = try util.getLittle(f32, subrecord.payload) };
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .NAME => NAME = subrecord.payload,
+            .FNAM => new_GLOB.FNAM = subrecord.payload[0],
+            .FLTV => new_GLOB.FLTV = .{ .float = try util.getLittle(f32, subrecord.payload) },
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_GLOB.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    switch (new_GLOB.FNAM) {
+        's' => {
+            const fltv = new_GLOB.FLTV.float;
+            new_GLOB.FLTV = .{
+                .short = if (fltv <= std.math.maxInt(i16)) @floatToInt(i16, fltv) else 0,
+            };
+        },
+        'l' => {
+            const fltv = new_GLOB.FLTV.float;
+            new_GLOB.FLTV = .{
+                .long = if (fltv <= std.math.maxInt(i32)) @floatToInt(i32, fltv) else 0,
+            };
+        },
+        'f' => {},
+        else => return error.Invalid_GLOB_FNAM,
+    }
 
-        switch (new_GLOB.FNAM) {
-            's' => {
-                const fltv = new_GLOB.FLTV.float;
-                new_GLOB.FLTV = .{
-                    .short = if (fltv <= std.math.maxInt(i16)) @floatToInt(i16, fltv) else 0,
-                };
-            },
-            'l' => {
-                const fltv = new_GLOB.FLTV.float;
-                new_GLOB.FLTV = .{
-                    .long = if (fltv <= std.math.maxInt(i32)) @floatToInt(i32, fltv) else 0,
-                };
-            },
-            'f' => {},
-            else => return error.Invalid_GLOB_FNAM,
-        }
-
-        return record_map.put(allocator, name, new_GLOB);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_GLOB);
 }
 
 inline fn writeFields(

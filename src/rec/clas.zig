@@ -15,16 +15,16 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const CLDT = extern struct {
-    attributes: [2]u32 align(1),
-    specialization: u32 align(1),
-    skills: [5][2]u32 align(1),
-    flags: u32 align(1),
-    autocalc: u32 align(1),
+    attributes: [2]u32 align(1) = [_]u32{ 0, 0 },
+    specialization: u32 align(1) = 0,
+    skills: [5][2]u32 align(1) = [_][2]u32{.{ 0, 0 }} ** 5,
+    flags: u32 align(1) = 0,
+    autocalc: u32 align(1) = 0,
 };
 
 deleted: bool,
-FNAM: []const u8 = undefined,
-CLDT: CLDT = undefined,
+CLDT: CLDT = .{},
+FNAM: ?[]const u8 = null,
 DESC: ?[]const u8 = null,
 
 const CLAS = @This();
@@ -39,57 +39,32 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_CLAS: CLAS = .{ .deleted = util.truncateRecordFlag(flag) & 1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        FNAM: bool = false,
-        CLDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_CLAS.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .FNAM => {
-                if (meta.FNAM) return error.SubrecordRedeclared;
-                meta.FNAM = true;
-
-                new_CLAS.FNAM = subrecord.payload;
-            },
-            .CLDT => {
-                if (meta.CLDT) return error.SubrecordRedeclared;
-                meta.CLDT = true;
-
-                new_CLAS.CLDT = try util.getLittle(CLDT, subrecord.payload);
-            },
-            .DESC => {
-                if (new_CLAS.DESC != null) return error.SubrecordRedeclared;
-
-                new_CLAS.DESC = subrecord.payload;
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .NAME => NAME = subrecord.payload,
+            .FNAM => new_CLAS.FNAM = subrecord.payload,
+            .CLDT => new_CLAS.CLDT = try util.getLittle(CLDT, subrecord.payload),
+            .DESC => new_CLAS.DESC = subrecord.payload,
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_CLAS.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_CLAS);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_CLAS);
 }
 
 pub fn writeAll(

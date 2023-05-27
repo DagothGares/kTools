@@ -4,20 +4,20 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const WPDT = extern struct {
-    weight: f32 align(1),
-    value: u32 align(1),
-    weapon_type: u16 align(1),
-    durability: u16 align(1),
-    speed: f32 align(1),
-    reach: f32 align(1),
-    enchant_pts: u16 align(1),
-    attacks: [3][2]u8 align(1),
-    flags: u32 align(1),
+    weight: f32 align(1) = 0,
+    value: u32 align(1) = 0,
+    weapon_type: u16 align(1) = 0,
+    durability: u16 align(1) = 0,
+    speed: f32 align(1) = 0,
+    reach: f32 align(1) = 0,
+    enchant_pts: u16 align(1) = 0,
+    attacks: [3][2]u8 align(1) = [_][2]u8{.{ 0, 0 }} ** 3,
+    flags: u32 align(1) = 0,
 };
 
 flag: u2,
-MODL: []const u8 = undefined,
-WPDT: WPDT = undefined,
+MODL: ?[]const u8 = null,
+WPDT: WPDT = .{},
 FNAM: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
 ENAM: ?[]const u8 = null,
@@ -35,58 +35,33 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_WEAP: WEAP = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        MODL: bool = false,
-        WPDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_WEAP.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
+            .NAME => NAME = subrecord.payload,
+            .WPDT => new_WEAP.WPDT = try util.getLittle(WPDT, subrecord.payload),
+            inline .MODL, .FNAM, .ITEX, .ENAM, .SCRI => |known| {
+                @field(new_WEAP, @tagName(known)) = subrecord.payload;
             },
-            .MODL => {
-                if (meta.MODL) return error.SubrecordRedeclared;
-                meta.MODL = true;
-
-                new_WEAP.MODL = subrecord.payload;
-            },
-            .WPDT => {
-                if (meta.WPDT) return error.SubrecordRedeclared;
-                meta.WPDT = true;
-
-                new_WEAP.WPDT = try util.getLittle(WPDT, subrecord.payload);
-            },
-            inline .FNAM, .ITEX, .ENAM, .SCRI => |known| {
-                const tag = @tagName(known);
-                if (@field(new_WEAP, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_WEAP, tag) = subrecord.payload;
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_WEAP.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_WEAP);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_WEAP);
 }
 
 inline fn writeWpdt(

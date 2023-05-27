@@ -18,16 +18,16 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const BKDT = extern struct {
-    weight: f32 align(1),
-    value: u32 align(1),
-    flags: u32 align(1),
-    skill_id: i32 align(1),
-    enchant_points: u32 align(1),
+    weight: f32 align(1) = 0,
+    value: u32 align(1) = 0,
+    flags: u32 align(1) = 0,
+    skill_id: i32 align(1) = 0, // amusing side effect:
+    enchant_points: u32 align(1) = 0,
 };
 
 flag: u2,
-MODL: []const u8 = undefined,
-BKDT: BKDT = undefined,
+BKDT: BKDT = .{},
+MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
@@ -46,58 +46,34 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_BOOK: BOOK = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        MODL: bool = false,
-        BKDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_BOOK.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .MODL => {
-                if (meta.MODL) return error.SubrecordRedeclared;
-                meta.MODL = true;
-
-                new_BOOK.MODL = subrecord.payload;
-            },
-            .BKDT => {
-                if (meta.BKDT) return error.SubrecordRedeclared;
-                meta.BKDT = true;
-
-                new_BOOK.BKDT = try util.getLittle(BKDT, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .MODL => new_BOOK.MODL = subrecord.payload,
+            .BKDT => new_BOOK.BKDT = try util.getLittle(BKDT, subrecord.payload),
             inline .FNAM, .SCRI, .ITEX, .TEXT, .ENAM => |known| {
-                const tag = @tagName(known);
-                if (@field(new_BOOK, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_BOOK, tag) = subrecord.payload;
+                @field(new_BOOK, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_BOOK.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_BOOK);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_BOOK);
 }
 
 pub fn writeAll(

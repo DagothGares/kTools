@@ -11,9 +11,9 @@ const PathPoint = extern struct {
 };
 
 const DATA = extern struct {
-    grid: [2]i32 align(1),
-    flags: u16 align(1),
-    path_point_count: u16 align(1),
+    grid: [2]i32 align(1) = [_]i32{0} ** 2,
+    flags: u16 align(1) = 0,
+    path_point_count: u16 align(1) = 0,
 };
 
 pub const pgrd_data = struct {
@@ -37,8 +37,8 @@ pub const pgrd_data = struct {
 };
 
 deleted: bool,
-DATA: DATA = undefined,
-NAME: ?[]const u8 = null,
+DATA: DATA = .{},
+NAME: []const u8 = "",
 PGRP: ?[]PathPoint = null,
 PGRC: ?[]u32 = null,
 
@@ -59,29 +59,26 @@ pub fn parse(
         if (new_PGRD.PGRC) |pgrc| allocator.free(pgrc);
     }
 
-    var meta: struct {
-        NAME: bool = false,
-        DATA: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_PGRD.deleted = true,
             .NAME => {
-                if (meta.NAME) return error.SubrecordRedeclared;
-                meta.NAME = true;
-
                 // These can be empty when they're tied to unnamed exteriors
                 if (subrecord.payload[0] != 0) new_PGRD.NAME = subrecord.payload;
             },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_PGRD.DATA = try util.getLittle(DATA, subrecord.payload);
-            },
+            .DATA => new_PGRD.DATA = try util.getLittle(DATA, subrecord.payload),
             inline .PGRP, .PGRC => |known| {
                 const field_type = switch (known) {
                     .PGRP => PathPoint,
@@ -89,8 +86,6 @@ pub fn parse(
                     else => unreachable,
                 };
                 const tag = @tagName(known);
-                if (@field(new_PGRD, tag) != null) return error.SubrecordRedeclared;
-
                 const size = @sizeOf(field_type);
 
                 @field(new_PGRD, tag) = try allocator.alloc(
@@ -107,33 +102,29 @@ pub fn parse(
                     index += size;
                 }
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (meta.DATA) {
-        const as_u64 = @bitCast(u64, new_PGRD.DATA.grid);
-        // flag check is to verify true 0
-        const is_interior = as_u64 == 0 and new_PGRD.DATA.flags != 16384;
+    const as_u64 = @bitCast(u64, new_PGRD.DATA.grid);
+    // flag check is to verify true 0
+    const is_interior = as_u64 == 0 and new_PGRD.DATA.flags != 16384;
 
-        if (is_interior) {
-            if (new_PGRD.NAME) |name| {
-                if (record_map.interior.get(name)) |pgrd| {
-                    if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
-                    if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
-                }
-
-                return record_map.interior.put(allocator, name, new_PGRD);
-            } else return error.MissingRequiredSubrecord;
-        } else {
-            if (record_map.exterior.get(as_u64)) |pgrd| {
-                if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
-                if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
-            }
-
-            return record_map.exterior.put(allocator, as_u64, new_PGRD);
+    if (is_interior) {
+        if (record_map.interior.get(new_PGRD.NAME)) |pgrd| {
+            if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
+            if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
         }
-    } else return error.MissingRequiredSubrecord;
+
+        return record_map.interior.put(allocator, new_PGRD.NAME, new_PGRD);
+    } else {
+        if (record_map.exterior.get(as_u64)) |pgrd| {
+            if (pgrd.PGRP) |pgrp| allocator.free(pgrp);
+            if (pgrd.PGRC) |pgrc| allocator.free(pgrc);
+        }
+
+        return record_map.exterior.put(allocator, as_u64, new_PGRD);
+    }
 }
 
 inline fn writePgrc(

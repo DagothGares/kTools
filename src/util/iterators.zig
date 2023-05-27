@@ -39,38 +39,35 @@ pub fn RecordIterator(comptime stream_type: type) type {
 }
 
 pub const Subrecord = struct {
-    tag: util.subs,
+    tag: u32,
+    pos: u64,
     payload: []const u8,
 };
 
 pub fn SubrecordIterator(comptime stream_type: type) type {
     return struct {
         stream: stream_type,
+        pos_offset: u64,
 
         const Self = @This();
 
-        pub fn next(
-            self: *Self,
-            logger: util.Logger,
-            plugin_name: []const u8,
-            start: u64,
-        ) !?Subrecord {
+        pub fn next(self: *Self) ?Subrecord {
             if (self.stream.getPos() catch unreachable >= self.stream.buffer.len) return null;
             var reader = self.stream.reader();
 
-            const tag = try util.parseSub(
-                logger,
-                plugin_name,
-                try self.stream.getPos() + start,
-                try reader.readIntNative(u32),
-            );
-            var len = try reader.readIntLittle(u32);
-            if (len == 0) len = 1;
+            const stream_pos = self.pos_offset + (self.stream.getPos() catch unreachable);
+
+            const tag = reader.readIntLittle(u32) catch return null;
+            var len = reader.readIntLittle(u32) catch return null;
+            len += @boolToInt(len == 0);
 
             const pos = self.stream.getPos() catch unreachable;
-            try self.stream.seekBy(len);
+            if (pos + len > self.stream.buffer.len) return null;
+            self.stream.seekBy(len) catch unreachable;
+
             return .{
                 .tag = tag,
+                .pos = stream_pos,
                 .payload = self.stream.buffer[pos .. pos + len],
             };
         }

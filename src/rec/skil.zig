@@ -4,13 +4,13 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const SKDT = extern struct {
-    attribute: u32 align(1),
-    specialization: u32 align(1),
-    use_values: [4]f32 align(1),
+    attribute: u32 align(1) = 0,
+    specialization: u32 align(1) = 0,
+    use_values: [4]f32 align(1) = [_]f32{0} ** 4,
 };
 
 deleted: bool,
-SKDT: SKDT = undefined,
+SKDT: SKDT = .{},
 DESC: ?[]const u8 = null,
 
 const SKIL = @This();
@@ -25,50 +25,31 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SKIL: SKIL = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INDX: ?u32 = null;
+    var INDX: u32 = 0;
 
-    var meta: struct {
-        SKDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_SKIL.deleted = true,
-            .INDX => {
-                if (INDX != null) return error.SubrecordRedeclared;
-
-                INDX = try util.getLittle(u32, subrecord.payload);
-            },
-            .SKDT => {
-                if (meta.SKDT) return error.SubrecordRedeclared;
-                meta.SKDT = true;
-
-                new_SKIL.SKDT = try util.getLittle(SKDT, subrecord.payload);
-            },
-            .DESC => {
-                if (new_SKIL.DESC != null) return error.SubrecordRedeclared;
-
-                new_SKIL.DESC = subrecord.payload;
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .INDX => INDX = try util.getLittle(u32, subrecord.payload),
+            .SKDT => new_SKIL.SKDT = try util.getLittle(SKDT, subrecord.payload),
+            .DESC => new_SKIL.DESC = subrecord.payload,
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (INDX) |indx| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_SKIL.deleted) {
-                    if (record_map.getPtr(indx)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, indx, new_SKIL);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, INDX, new_SKIL);
 }
 
 // mostly copied and pasted from MGEF

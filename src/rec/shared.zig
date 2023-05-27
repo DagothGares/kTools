@@ -15,21 +15,21 @@ pub const NPCO = struct {
 };
 
 pub const AIDT = extern struct {
-    greet: u8 align(1),
-    _garbage1: u8 align(1),
-    fight: u8 align(1),
-    flee: u8 align(1),
-    alarm: u8 align(1),
-    _garbage2: u16 align(1),
-    _garbage3: u8 align(1),
-    flags: u32 align(1),
+    greet: u8 align(1) = 0,
+    _garbage1: u8 align(1) = 0,
+    fight: u8 align(1) = 0,
+    flee: u8 align(1) = 0,
+    alarm: u8 align(1) = 0,
+    _garbage2: u16 align(1) = 0,
+    _garbage3: u8 align(1) = 0,
+    flags: u32 align(1) = 0,
 };
 
 pub const __DT = extern struct {
-    weight: f32 align(1),
-    value: u32 align(1),
-    quality: f32 align(1),
-    durability: u32 align(1),
+    weight: f32 align(1) = 0,
+    value: u32 align(1) = 0,
+    quality: f32 align(1) = 0,
+    durability: u32 align(1) = 0,
 };
 
 pub const ENAM = extern struct {

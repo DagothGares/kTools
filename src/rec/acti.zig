@@ -1,10 +1,8 @@
 const std = @import("std");
 const util = @import("../util.zig");
 
-const subs = util.subs;
-
 flag: u2,
-MODL: []const u8 = undefined,
+MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 SCRI: ?[]const u8 = null,
 
@@ -20,53 +18,32 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_ACTI: ACTI = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = ""; // I hate this, but it's what Morrowind does...
 
-    var meta: struct {
-        MODL: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    // TODO: integrate pointers to the logger and the plugin_name in the iterator itself,
-    // so it only needs the start value
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_ACTI.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
+            .NAME => NAME = subrecord.payload,
+            inline .MODL, .FNAM, .SCRI => |known| {
+                @field(new_ACTI, @tagName(known)) = subrecord.payload;
             },
-            .MODL => {
-                if (meta.MODL) return error.SubrecordRedeclared;
-                meta.MODL = true;
-
-                new_ACTI.MODL = subrecord.payload;
-            },
-            inline .FNAM, .SCRI => |known| {
-                const tag = @tagName(known);
-                if (@field(new_ACTI, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_ACTI, tag) = subrecord.payload;
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_ACTI.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_ACTI);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_ACTI);
 }
 
 pub fn writeAll(

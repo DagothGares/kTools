@@ -12,7 +12,7 @@ const VHGT = extern struct {
 };
 
 deleted: bool,
-DATA: u32 = undefined,
+DATA: u32 = 0,
 VHGT: ?*align(1) const VHGT = null,
 VNML: ?*align(1) const [65][65][3]i8 = null,
 WNAM: ?*align(1) const [9][9]u8 = null,
@@ -32,40 +32,30 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_LAND: LAND = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var INTV: ?u64 = null;
+    var INTV: u64 = 0;
 
-    var meta: struct {
-        DATA: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_LAND.deleted = true,
-            .INTV => {
-                if (INTV != null) return error.SubrecordRedeclared;
-
-                INTV = @bitCast(u64, try util.getLittle([2]i32, subrecord.payload));
-            },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_LAND.DATA = try util.getLittle(u32, subrecord.payload);
-            },
-            .VHGT => {
-                // vhgt is special because we strip 3 bytes of junk at the end
-                if (new_LAND.VHGT != null) return error.SubrecordRedeclared;
-                if (subrecord.payload.len < 4229) return error.TooSmall;
-
-                new_LAND.VHGT = @ptrCast(*align(1) const VHGT, subrecord.payload[0..4229]);
-            },
-            inline .VNML, .WNAM, .VCLR, .VTEX => |known| {
+            .INTV => INTV = @bitCast(u64, try util.getLittle([2]i32, subrecord.payload)),
+            .DATA => new_LAND.DATA = try util.getLittle(u32, subrecord.payload),
+            inline .VHGT, .VNML, .WNAM, .VCLR, .VTEX => |known| {
                 const tag = @tagName(known);
-                if (@field(new_LAND, tag) != null) return error.SubrecordRedeclared;
 
                 const field_type = switch (known) {
+                    .VHGT => VHGT,
                     .VNML => [65][65][3]i8,
                     .WNAM => [9][9]u8,
                     .VCLR => [65][65][3]u8,
@@ -74,25 +64,16 @@ pub fn parse(
                 };
                 if (subrecord.payload.len < @sizeOf(field_type)) return error.TooSmall;
 
-                @field(new_LAND, tag) = @ptrCast(*align(1) const field_type, subrecord.payload);
+                @field(new_LAND, tag) = @ptrCast(
+                    *align(1) const field_type,
+                    subrecord.payload[0..@sizeOf(field_type)],
+                );
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (INTV) |intv| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_LAND.deleted) {
-                    if (record_map.getPtr(intv)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, intv, new_LAND);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, INTV, new_LAND);
 }
 
 pub fn writeAll(

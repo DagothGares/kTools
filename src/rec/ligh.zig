@@ -4,16 +4,16 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const LHDT = extern struct {
-    weight: f32 align(1),
-    value: u32 align(1),
-    time: i32 align(1),
-    radius: u32 align(1),
-    color: [4]u8 align(1),
-    flags: u32 align(1),
+    weight: f32 align(1) = 0,
+    value: u32 align(1) = 0,
+    time: i32 align(1) = 0,
+    radius: u32 align(1) = 0,
+    color: [4]u8 align(1) = [_]u8{0} ** 4,
+    flags: u32 align(1) = 0,
 };
 
 flag: u2,
-LHDT: LHDT = undefined,
+LHDT: LHDT = .{},
 MODL: ?[]const u8 = null,
 FNAM: ?[]const u8 = null,
 ITEX: ?[]const u8 = null,
@@ -32,51 +32,33 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_LIGH: LIGH = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        LHDT: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_LIGH.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .LHDT => {
-                if (meta.LHDT) return error.SubrecordRedeclared;
-                meta.LHDT = true;
-
-                new_LIGH.LHDT = try util.getLittle(LHDT, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .LHDT => new_LIGH.LHDT = try util.getLittle(LHDT, subrecord.payload),
             inline .MODL, .FNAM, .ITEX, .SNAM, .SCRI => |known| {
-                const tag = @tagName(known);
-                if (@field(new_LIGH, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_LIGH, tag) = subrecord.payload;
+                @field(new_LIGH, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_LIGH.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_LIGH);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_LIGH);
 }
 
 inline fn writeLhdt(

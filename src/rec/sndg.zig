@@ -4,7 +4,7 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 flag: u2,
-DATA: u32 = undefined,
+DATA: u32 = 0,
 CNAM: ?[]const u8 = null,
 SNAM: ?[]const u8 = null,
 
@@ -20,51 +20,33 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SNDG: SNDG = .{ .flag = util.truncateRecordFlag(flag) };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        DATA: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_SNDG.flag |= 0x1,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_SNDG.DATA = try util.getLittle(u32, subrecord.payload);
-            },
+            .NAME => NAME = subrecord.payload,
+            .DATA => new_SNDG.DATA = try util.getLittle(u32, subrecord.payload),
             inline .CNAM, .SNAM => |known| {
-                const tag = @tagName(known);
-                if (@field(new_SNDG, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_SNDG, tag) = subrecord.payload;
+                @field(new_SNDG, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_SNDG.flag & 0x1 != 0) {
-                    if (record_map.getPtr(name)) |existing| existing.flag |= 0x1;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_SNDG);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_SNDG);
 }
 
 pub fn writeAll(

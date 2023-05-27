@@ -13,10 +13,8 @@ pub const lev_type = enum { LEVC, LEVI };
 // LEVC and LEVI are basically the same, except one uses CNAM and the other uses INAM
 lev_: lev_type,
 deleted: bool,
-DATA: u32 = undefined,
-NNAM: u8 = undefined,
-// INDX ignored
-
+DATA: u32 = 0,
+NNAM: u8 = 0,
 // TODO: make this a StringArrayHashMap that marks weights for the given levels
 _NAM: ?[]_NAM = null,
 
@@ -33,71 +31,58 @@ pub fn parse(
     comptime lev: lev_type,
 ) !void {
     var new_LEV: LEV_ = .{ .lev_ = lev, .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
-
-    var meta: struct {
-        DATA: bool = false,
-        NNAM: bool = false,
-    } = .{};
+    var NAME: []const u8 = "";
 
     var new_NAM: std.ArrayListUnmanaged(_NAM) = .{};
     defer new_NAM.deinit(allocator);
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
+
+        switch (sub_tag) {
             .DELE => new_LEV.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
+            .NAME => NAME = subrecord.payload,
+            .DATA => new_LEV.DATA = try util.getLittle(u32, subrecord.payload),
+            .NNAM => new_LEV.NNAM = subrecord.payload[0],
+            if (lev == .LEVC) .CNAM else .INAM => try new_NAM.append(allocator, .{
+                .name = subrecord.payload,
+                .pc_level = blk: {
+                    const pos = iterator.stream.getPos() catch unreachable;
+                    const next = iterator.next() orelse break :blk 0;
+                    if (try util.parseSub(
+                        logger,
+                        next.tag,
+                        next.pos,
+                        plugin_name,
+                    ) orelse .DELE != .INTV) {
+                        iterator.stream.seekTo(pos) catch unreachable;
+                        break :blk 0;
+                    }
 
-                NAME = subrecord.payload;
-            },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_LEV.DATA = try util.getLittle(u32, subrecord.payload);
-            },
-            .NNAM => {
-                if (meta.NNAM) return error.SubrecordRedeclared;
-                meta.NNAM = true;
-
-                new_LEV.NNAM = subrecord.payload[0];
-            },
-            if (lev == .LEVC) .CNAM else .INAM => {
-                var _nam: _NAM = .{ .name = subrecord.payload };
-
-                const should_be_INTV = try iterator.next(logger, plugin_name, start) orelse
-                    return error.MissingRequiredSubrecord;
-                if (should_be_INTV.tag != .INTV) return error.MissingRequiredSubrecord;
-                _nam.pc_level = try util.getLittle(u16, should_be_INTV.payload);
-
-                try new_NAM.append(allocator, _nam);
-            },
+                    break :blk try util.getLittle(u16, next.payload);
+                },
+            }),
             .INDX => {},
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_LEV.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
+    if (record_map.get(NAME)) |lev_| if (lev_._NAM) |_nam| allocator.free(_nam);
 
-        if (record_map.get(name)) |lev_| if (lev_._NAM) |_nam| allocator.free(_nam);
+    if (new_NAM.items.len > 0) new_LEV._NAM = try new_NAM.toOwnedSlice(allocator);
+    errdefer if (new_LEV._NAM) |_nam| allocator.free(_nam);
 
-        if (new_NAM.items.len > 0) new_LEV._NAM = try new_NAM.toOwnedSlice(allocator);
-        errdefer if (new_LEV._NAM) |_nam| allocator.free(_nam);
-
-        return record_map.put(allocator, name, new_LEV);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_LEV);
 }
 
 pub fn writeAll(

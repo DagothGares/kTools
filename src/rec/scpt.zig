@@ -4,15 +4,15 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const SCHD = extern struct {
-    num_shorts: u32 align(1),
-    num_longs: u32 align(1),
-    num_floats: u32 align(1),
-    script_data_size: u32 align(1),
-    local_var_size: u32 align(1),
+    num_shorts: u32 align(1) = 0,
+    num_longs: u32 align(1) = 0,
+    num_floats: u32 align(1) = 0,
+    script_data_size: u32 align(1) = 0,
+    local_var_size: u32 align(1) = 0,
 };
 
 deleted: bool,
-SCHD: SCHD = undefined,
+SCHD: SCHD = .{},
 // NOTE: should be split into a set of substrings at write time
 SCVR: ?[]const u8 = null,
 SCDT: ?[]const u8 = null,
@@ -30,21 +30,24 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SCPT: SCPT = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        SCHD: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_SCPT.deleted = true,
             .SCHD => {
-                if (meta.SCHD) return error.SubrecordRedeclared;
-                meta.SCHD = true;
-
                 if (subrecord.payload.len < 52) return error.TooSmall;
 
                 // For several reasons, it's a really good idea to do this instead of putting it
@@ -54,18 +57,13 @@ pub fn parse(
                 new_SCPT.SCHD = util.getLittle(SCHD, subrecord.payload[32..]) catch unreachable;
             },
             inline .SCVR, .SCDT, .SCTX => |known| {
-                const tag = @tagName(known);
-                if (@field(new_SCPT, tag) != null) return error.SubrecordRedeclared;
-
-                @field(new_SCPT, tag) = subrecord.payload;
+                @field(new_SCPT, @tagName(known)) = subrecord.payload;
             },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        return record_map.put(allocator, name, new_SCPT);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_SCPT);
 }
 
 inline fn writeVrDt(

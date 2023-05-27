@@ -4,14 +4,14 @@ const util = @import("../util.zig");
 const subs = util.subs;
 
 const DATA = extern struct {
-    volume: u8 align(1),
-    min_range: u8 align(1),
-    max_range: u8 align(1),
+    volume: u8 align(1) = 0,
+    min_range: u8 align(1) = 0,
+    max_range: u8 align(1) = 0,
 };
 
 deleted: bool,
-FNAM: []const u8 = undefined,
-DATA: DATA = undefined,
+DATA: DATA = .{},
+FNAM: ?[]const u8 = null,
 
 const SOUN = @This();
 
@@ -25,52 +25,31 @@ pub fn parse(
     flag: u32,
 ) !void {
     var new_SOUN: SOUN = .{ .deleted = util.truncateRecordFlag(flag) & 0x1 != 0 };
-    var NAME: ?[]const u8 = null;
+    var NAME: []const u8 = "";
 
-    var meta: struct {
-        FNAM: bool = false,
-        DATA: bool = false,
-    } = .{};
+    var iterator: util.SubrecordIterator = .{
+        .stream = std.io.fixedBufferStream(record),
+        .pos_offset = start,
+    };
 
-    var iterator: util.SubrecordIterator = .{ .stream = std.io.fixedBufferStream(record) };
+    while (iterator.next()) |subrecord| {
+        const sub_tag = try util.parseSub(
+            logger,
+            subrecord.tag,
+            subrecord.pos,
+            plugin_name,
+        ) orelse continue;
 
-    while (try iterator.next(logger, plugin_name, start)) |subrecord| {
-        switch (subrecord.tag) {
+        switch (sub_tag) {
             .DELE => new_SOUN.deleted = true,
-            .NAME => {
-                if (NAME != null) return error.SubrecordRedeclared;
-
-                NAME = subrecord.payload;
-            },
-            .FNAM => {
-                if (meta.FNAM) return error.SubrecordRedeclared;
-                meta.FNAM = true;
-
-                new_SOUN.FNAM = subrecord.payload;
-            },
-            .DATA => {
-                if (meta.DATA) return error.SubrecordRedeclared;
-                meta.DATA = true;
-
-                new_SOUN.DATA = try util.getLittle(DATA, subrecord.payload);
-            },
-            else => return util.errUnexpectedSubrecord(logger, subrecord.tag),
+            .NAME => NAME = subrecord.payload,
+            .FNAM => new_SOUN.FNAM = subrecord.payload,
+            .DATA => new_SOUN.DATA = try util.getLittle(DATA, subrecord.payload),
+            else => try util.warnUnexpectedSubrecord(logger, sub_tag, subrecord.pos, plugin_name),
         }
     }
 
-    if (NAME) |name| {
-        inline for (std.meta.fields(@TypeOf(meta))) |field| {
-            if (!@field(meta, field.name)) {
-                if (new_SOUN.deleted) {
-                    if (record_map.getPtr(name)) |existing| existing.deleted = true;
-                    return;
-                }
-                return error.MissingRequiredSubrecord;
-            }
-        }
-
-        return record_map.put(allocator, name, new_SOUN);
-    } else return error.MissingRequiredSubrecord;
+    return record_map.put(allocator, NAME, new_SOUN);
 }
 
 pub fn writeAll(
