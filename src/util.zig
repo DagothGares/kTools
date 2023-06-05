@@ -350,7 +350,7 @@ pub fn getValidFilename(allocator: std.mem.Allocator, stream: anytype, str: []co
 
     var writer = stream.writer();
     try writer.writeByte('\"');
-    try toUtf8.write(writer, raw_copy);
+    try toUtf8.write(writer, raw_copy[0 .. raw_copy.len - 5]);
     try writer.writeAll("\",");
 
     @memcpy(raw_copy[raw_copy.len - 5 ..], ".json");
