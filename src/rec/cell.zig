@@ -485,11 +485,9 @@ pub fn writeAll(
     // Because cell_data doesn't store mvrf and frmr information with the header, we can't use
     // util.writeAllGeneric for this, unfortunately.
     for (record_map.header.interior.keys(), record_map.header.interior.values()) |k, v| {
-        const translated_key = try util.getValidFilename(allocator, k);
+        const translated_key = try util.getValidFilename(allocator, list_writer, k);
         defer allocator.free(translated_key);
         var sub_key = translated_key;
-
-        try list_writer.writer().print("\"{s}\",", .{translated_key[0 .. translated_key.len - 5]});
 
         var sub_dir = dir;
         const new_dir = try util.getPath(&sub_key, &sub_dir);

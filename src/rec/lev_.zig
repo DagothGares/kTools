@@ -94,14 +94,13 @@ pub fn writeAll(
     levi_writer: *std.io.BufferedWriter(4096, std.fs.File.Writer),
 ) !void {
     for (record_map.keys(), record_map.values()) |k, v| {
-        const translated_key = try util.getValidFilename(allocator, k);
+        const translated_key = try util.getValidFilename(
+            allocator,
+            if (v.lev_ == .LEVC) levc_writer else levi_writer,
+            k,
+        );
         defer allocator.free(translated_key);
         var sub_key = translated_key;
-
-        try (if (v.lev_ == .LEVC) levc_writer else levi_writer).writer().print(
-            "\"{s}\",",
-            .{translated_key[0 .. translated_key.len - 5]},
-        );
 
         var sub_dir = if (v.lev_ == .LEVC) c_dir else i_dir;
         const new_dir = try util.getPath(&sub_key, &sub_dir);

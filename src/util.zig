@@ -189,12 +189,9 @@ pub fn writeAllGeneric(
         .{.{""}});
 
     for (record_map.keys(), record_map.values()) |k, v| {
-        // TODO: this could probably be achieved with stack allocation
-        const translated_key = try getValidFilename(allocator, k);
+        const translated_key = try getValidFilename(allocator, list_writer, k);
         defer allocator.free(translated_key);
         var sub_key = translated_key;
-
-        try list_writer.writer().print("\"{s}\",", .{translated_key[0 .. translated_key.len - 5]});
 
         var sub_dir = dir;
         const new_dir = try getPath(&sub_key, &sub_dir);
@@ -328,7 +325,8 @@ pub fn getPath(key: *[]const u8, dir: *std.fs.Dir) !bool {
     } else return false;
 }
 
-pub fn getValidFilename(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
+// Retrofitted to also write a non-escaped filename to the list writer
+pub fn getValidFilename(allocator: std.mem.Allocator, stream: anytype, str: []const u8) ![]u8 {
     const is_windows = builtin.os.tag == .windows;
     // microsoft-ism
     const prefixed = if (is_windows) blk: {
@@ -350,6 +348,12 @@ pub fn getValidFilename(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
 
     _ = std.ascii.lowerString(raw_copy[0 + @boolToInt(prefixed) ..], str);
     @memcpy(raw_copy[raw_copy.len - 5 ..], ".json");
+
+    var writer = stream.writer();
+    try writer.writeByte('\"');
+    try toUtf8.write(writer, raw_copy);
+    try writer.writeAll("\",");
+
     for (raw_copy[0 .. raw_copy.len - 5]) |*c| {
         switch (c.*) {
             '<', '>', '\"', '|', '*', '?', '\r', '\n', '\t' => c.* = '_',
