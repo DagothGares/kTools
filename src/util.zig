@@ -347,13 +347,13 @@ pub fn getValidFilename(allocator: std.mem.Allocator, stream: anytype, str: []co
     if (is_windows) raw_copy[0] = '_';
 
     _ = std.ascii.lowerString(raw_copy[0 + @boolToInt(prefixed) ..], str);
-    @memcpy(raw_copy[raw_copy.len - 5 ..], ".json");
 
     var writer = stream.writer();
     try writer.writeByte('\"');
     try toUtf8.write(writer, raw_copy);
     try writer.writeAll("\",");
 
+    @memcpy(raw_copy[raw_copy.len - 5 ..], ".json");
     for (raw_copy[0 .. raw_copy.len - 5]) |*c| {
         switch (c.*) {
             '<', '>', '\"', '|', '*', '?', '\r', '\n', '\t' => c.* = '_',
